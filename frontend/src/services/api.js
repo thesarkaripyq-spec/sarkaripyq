@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import useAuthStore from '../store/authStore';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL || 'https://sarkaripyq.com/api') + '/api/v1';
+const API_BASE_URL = (process.env.REACT_APP_API_URL || '') + '/api/v1';
 
 const cleanParams = (params) => {
   const cleaned = {};
@@ -297,10 +297,3 @@ export const subjectsAPI = {
   }
 };
 
-// Performance API
-export const performanceAPI = {
-  get: async () => {
-    try { return await fetchFromBackend('/performance'); }
-    catch { return { data: {} }; }
-  }
-};
