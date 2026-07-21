@@ -21,17 +21,17 @@ const Footer = memo(({ settings }) => {
   const youtubeUrl = normalizeUrl(socialLinks.youtube);
 
   const quickLinks = [
-    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl_previous_year_questions' },
-    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl_previous_year_questions' },
-    { name: 'SSC GD PYQ', path: '/ssc/ssc-gd_previous_year_questions' },
-    { name: 'SSC MTS PYQ', path: '/ssc/ssc-mts_previous_year_questions' },
-    { name: 'SSC CPO PYQ', path: '/ssc/ssc-cpo_previous_year_questions' },
-    { name: 'SSC JE PYQ', path: '/ssc/ssc-je_previous_year_questions' },
+    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl-previous-year-questions' },
+    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl-previous-year-questions' },
+    { name: 'SSC GD PYQ', path: '/ssc/ssc-gd-previous-year-questions' },
+    { name: 'SSC MTS PYQ', path: '/ssc/ssc-mts-previous-year-questions' },
+    { name: 'SSC CPO PYQ', path: '/ssc/ssc-cpo-previous-year-questions' },
+    { name: 'SSC JE PYQ', path: '/ssc/ssc-je-previous-year-questions' },
   ];
 
   const resourceLinks = [
-    { name: 'SSC Stenographer PYQ', path: '/ssc/ssc-stenographer_previous_year_questions' },
-    { name: 'SSC Selection Post PYQ', path: '/ssc/ssc-selection-post_previous_year_questions' },
+    { name: 'SSC Stenographer PYQ', path: '/ssc/ssc-stenographer-previous-year-questions' },
+    { name: 'SSC Selection Post PYQ', path: '/ssc/ssc-selection-post-previous-year-questions' },
     { name: 'Leaderboard', path: '/leaderboard' },
     { name: 'Recommended Books', path: '/best-books-for-ssc-exams' },
     { name: 'Frequently Asked Questions', path: '/faq' },
@@ -72,7 +72,7 @@ const Footer = memo(({ settings }) => {
                   aria-label="Facebook"
                   className="min-h-[44px] min-w-[44px] rounded-full border border-gray-700 bg-gray-900 flex items-center justify-center text-blue-400 transition-colors duration-200 hover:bg-gray-800"
                 >
-                  <FiFacebook size={16} />
+                  <FiFacebook size={16} aria-hidden="true" />
                 </a>
               )}
               {twitterUrl && (
@@ -83,7 +83,7 @@ const Footer = memo(({ settings }) => {
                   aria-label="Twitter"
                   className="min-h-[44px] min-w-[44px] rounded-full border border-gray-700 bg-gray-900 flex items-center justify-center text-sky-400 transition-colors duration-200 hover:bg-gray-800"
                 >
-                  <FiTwitter size={16} />
+                  <FiTwitter size={16} aria-hidden="true" />
                 </a>
               )}
               {instagramUrl && (
@@ -94,7 +94,7 @@ const Footer = memo(({ settings }) => {
                   aria-label="Instagram"
                   className="min-h-[44px] min-w-[44px] rounded-full border border-gray-700 bg-gray-900 flex items-center justify-center text-pink-400 transition-colors duration-200 hover:bg-gray-800"
                 >
-                  <FiInstagram size={16} />
+                  <FiInstagram size={16} aria-hidden="true" />
                 </a>
               )}
               {telegramUrl && (
@@ -105,7 +105,7 @@ const Footer = memo(({ settings }) => {
                   aria-label="Telegram"
                   className="min-h-[44px] min-w-[44px] rounded-full border border-gray-700 bg-gray-900 flex items-center justify-center text-cyan-400 transition-colors duration-200 hover:bg-gray-800"
                 >
-                  <FaTelegram size={16} />
+                  <FaTelegram size={16} aria-hidden="true" />
                 </a>
               )}
               {youtubeUrl && (
@@ -116,7 +116,7 @@ const Footer = memo(({ settings }) => {
                   aria-label="YouTube"
                   className="min-h-[44px] min-w-[44px] rounded-full border border-gray-700 bg-gray-900 flex items-center justify-center text-red-400 transition-colors duration-200 hover:bg-gray-800"
                 >
-                  <FaYoutube size={16} />
+                  <FaYoutube size={16} aria-hidden="true" />
                 </a>
               )}
             </div>
@@ -186,7 +186,7 @@ const Footer = memo(({ settings }) => {
               </div>
               <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-400">
                 <span>Made with</span>
-                <FaHeart className="text-red-500 text-xs" />
+                <FaHeart className="text-red-500 text-xs" aria-hidden="true" />
                 <span>for SSC Aspirants</span>
               </div>
             </div>

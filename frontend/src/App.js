@@ -37,7 +37,6 @@ const Login = lazyWithRetry(() => import('./pages/Auth/Login'));
 const Register = lazyWithRetry(() => import('./pages/Auth/Register'));
 const Profile = lazyWithRetry(() => import('./pages/Profile'));
 const Leaderboard = lazyWithRetry(() => import('./pages/Leaderboard'));
-const DatabaseStatus = lazyWithRetry(() => import('./pages/DatabaseStatus'));
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 // Redirect legacy /practice query parameters to dynamic SEO-friendly routes
@@ -72,13 +71,13 @@ const PracticeRedirector = () => {
 
   if (subject && topic) {
     const topicSlug = topic.trim().replace(/[^a-z0-9]+/g, '-');
-    return <Navigate to={`/ssc/${exam}/${subject}/${topicSlug}_previous_year_questions${querySuffix}`} replace />;
+    return <Navigate to={`/ssc/${exam}/${subject}/${topicSlug}-previous-year-questions${querySuffix}`} replace />;
   } else if (subject) {
-    return <Navigate to={`/ssc/${exam}/${subject}_previous_year_questions${querySuffix}`} replace />;
+    return <Navigate to={`/ssc/${exam}/${subject}-previous-year-questions${querySuffix}`} replace />;
   } else if (year) {
-    return <Navigate to={`/ssc/${exam}/${year}_previous_year_questions${querySuffix}`} replace />;
+    return <Navigate to={`/ssc/${exam}/${year}-previous-year-questions${querySuffix}`} replace />;
   } else {
-    return <Navigate to={`/ssc/${exam}_previous_year_questions${querySuffix}`} replace />;
+    return <Navigate to={`/ssc/${exam}-previous-year-questions${querySuffix}`} replace />;
   }
 };
 
@@ -143,7 +142,6 @@ function App() {
             <Route path="contact" element={<Contact />} />
             <Route path="faq" element={<FAQ />} />
             <Route path="leaderboard" element={<Leaderboard />} />
-            <Route path="database-status" element={<DatabaseStatus />} />
             <Route path="privacy-policy" element={<PrivacyPolicy />} />
             <Route path="terms-and-conditions" element={<TermsOfService />} />
             <Route path="disclaimer" element={<Disclaimer />} />

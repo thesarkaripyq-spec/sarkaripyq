@@ -114,7 +114,7 @@ const PrivacyPolicy = memo(() => {
             <h2 className='text-xl font-semibold mb-3 text-slate-800 dark:text-slate-200'>12. Contact Us</h2>
             <p>If you have any questions about this Privacy Policy, please contact us:</p>
             <p className='mt-2'>
-              <strong>Email:</strong> contact@sarkaripyq.com<br />
+              <strong>Email:</strong> thesarkaripyq@gmail.com<br />
               <strong>Website:</strong> https://sarkaripyq.com
             </p>
           </section>

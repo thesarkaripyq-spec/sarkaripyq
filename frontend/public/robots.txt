@@ -5,7 +5,6 @@ Allow: /
 Disallow: /login
 Disallow: /register
 Disallow: /profile
-Disallow: /database-status
 Disallow: /practice
 Disallow: /admin
 Crawl-Delay: 2

@@ -3,11 +3,8 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
 
-// Performance monitoring endpoint (authenticated, admin only)
+// Performance monitoring endpoint (authenticated)
 router.get('/', protect, asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Admin access required' });
-  }
   const memUsage = process.memoryUsage();
   const uptime = process.uptime();
 

@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import SEOHead from '../../components/Common/SEOHead';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import { authAPI } from '../../services/api';
-
-
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -89,8 +85,8 @@ const Register = () => {
   };
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <SEOHead title="Register" description="Create your account" noIndex />
+    <>
+    <SEOHead title="Register" description="Create your account" noIndex ogImage="/ssc-logo.webp" />
       
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <main className="flex-1 flex items-center justify-center p-4">
@@ -212,26 +208,12 @@ const Register = () => {
                 >
                   {isLoading ? 'Signing up...' : 'Continue'}
                 </button>
-              </form>
-            </div>
-
-            <p className="text-center mt-5 text-gray-500 text-sm">
-              Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 font-medium hover:text-blue-700">
-                Sign in
-              </Link>
-            </p>
+            </form>
           </div>
-        </main>
-
-        <footer className="text-center py-4 text-gray-400 text-xs">
-          By continuing, you agree to our{' '}
-          <Link to="/terms-and-conditions" className="underline hover:text-gray-600">Terms</Link>
-          {' '}and{' '}
-          <Link to="/privacy-policy" className="underline hover:text-gray-600">Privacy</Link>
-        </footer>
-      </div>
-    </GoogleOAuthProvider>
+        </div>
+      </main>
+    </div>
+    </>
   );
 };
 

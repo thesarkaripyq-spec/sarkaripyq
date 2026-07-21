@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import useAuthStore from '../store/authStore';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api/v1';
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'https://sarkaripyq.com/api') + '/api/v1';
 
 const cleanParams = (params) => {
   const cleaned = {};
@@ -140,11 +140,6 @@ export const authAPI = {
     if (!response.ok) throw new Error(resData.message || 'Failed to load CAPTCHA');
     return resData.data;
   },
-  getMe: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    return { data: user };
-  },
-  logout: async () => { await supabase.auth.signOut(); }
 };
 
 // Exams API
@@ -266,10 +261,6 @@ export const questionsAPI = {
 
 // Stats API
 export const statsAPI = {
-  getOverview: async () => {
-    try { return await fetchFromBackend('/stats/overview'); }
-    catch { return { data: { totalQuestions: 0, totalExams: 0, totalSubjects: 0 } }; }
-  },
   getUserStats: async () => {
     try { return await fetchFromBackend('/stats/user'); }
     catch { return { data: { overview: { totalAttempts: 0, correctAnswers: 0, wrongAnswers: 0, accuracy: 0 }, dailyProgress: [], subjectPerformance: [], examwiseStats: [], recentAttempts: [] } }; }
@@ -281,10 +272,6 @@ export const statsAPI = {
   resetScore: async () => {
     return fetchFromBackend('/stats/reset', { method: 'POST' });
   },
-  getDbSummary: async () => {
-    try { return await fetchFromBackend('/stats/db-summary'); }
-    catch { return { data: [] }; }
-  }
 };
 
 // Settings API
@@ -300,10 +287,6 @@ export const settingsAPI = {
 
 // Subjects API
 export const subjectsAPI = {
-  getAll: async (params) => {
-    const qs = new URLSearchParams(cleanParams(params)).toString();
-    return fetchFromBackend(`/subjects?${qs}`);
-  },
   getBySlug: async (examSlug, subjectSlug) => {
     const cacheKey = `subject_${examSlug}_${subjectSlug}`;
     const cached = getCached(cacheKey);
@@ -314,23 +297,6 @@ export const subjectsAPI = {
   }
 };
 
-// Books API
-export const booksAPI = {
-  getAll: async () => {
-    const cacheKey = 'books_all';
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-    try {
-      const res = await fetchFromBackend('/books');
-      const booksData = { data: res.data || [], booksByExam: res.booksByExam || {} };
-      setCached(cacheKey, booksData);
-      return booksData;
-    } catch {
-      return { data: [], booksByExam: {} };
-    }
-  }
-};
-
 // Performance API
 export const performanceAPI = {
   get: async () => {
@@ -338,6 +304,3 @@ export const performanceAPI = {
     catch { return { data: {} }; }
   }
 };
-
-const api = { authAPI, examsAPI, questionsAPI, statsAPI, settingsAPI, performanceAPI };
-export default api;

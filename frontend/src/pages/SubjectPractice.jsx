@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, memo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { FiChevronRight, FiFilter, FiX } from 'react-icons/fi';
 import SEOHead from '../components/Common/SEOHead';
@@ -9,6 +9,7 @@ import { subjectsAPI, questionsAPI, examsAPI } from '../services/api';
 import { ALLOWED_SUBJECTS } from '../constants/subjects';
 import usePracticeStore from '../store/practiceStore';
 import useAuthStore from '../store/authStore';
+import { FREE_ATTEMPT_LIMIT } from '../constants';
 import toast from 'react-hot-toast';
 
 const QuestionSkeleton = () => (
@@ -70,7 +71,7 @@ const SubjectPractice = memo(() => {
   const [showFilters, setShowFilters] = useState(false);
 
   const [showLoginGate, setShowLoginGate] = useState(false);
-  const freeAttemptLimit = 10;
+  const freeAttemptLimit = FREE_ATTEMPT_LIMIT;
   const tierOptions = tiers.length ? tiers : ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4'];
 
   const { isAuthenticated } = useAuthStore();
@@ -315,29 +316,34 @@ const SubjectPractice = memo(() => {
     setCurrentPage(1);
   };
 
-  const handleAnswer = async (questionId, selectedOption, isCorrect) => {
-    if (!isAuthenticated && sessionStats.attempted >= freeAttemptLimit) {
+  const sessionStatsRef = useRef(sessionStats);
+  sessionStatsRef.current = sessionStats;
+
+  const handleAnswer = useCallback(async (questionId, selectedOption) => {
+    if (!isAuthenticated && sessionStatsRef.current.attempted >= freeAttemptLimit) {
       setShowLoginGate(true);
       return;
     }
-    submitAnswer(questionId, selectedOption, isCorrect);
-    
-    if (isAuthenticated) {
-      try {
-        await questionsAPI.submitAttempt(questionId, { 
-          selectedAnswer: selectedOption,
-          timeSpent: 30 // TODO: Implement actual time tracking
-        });
-      } catch (error) {
-        console.error('Error submitting answer:', error);
-        if (error.message?.includes('session has expired')) {
-          toast.error('Session expired. Please login again.');
-        } else {
-          toast.error('Failed to save your answer. Check your connection and try again.');
-        }
+
+    let actualIsCorrect = false;
+    try {
+      const response = await questionsAPI.submitAttempt(questionId, {
+        selectedAnswer: selectedOption,
+        timeSpent: 30
+      });
+      if (response?.data?.correct != null) {
+        actualIsCorrect = response.data.correct;
+      }
+    } catch (error) {
+      console.error('Error submitting answer:', error);
+      if (error.message?.includes('session has expired')) {
+        toast.error('Session expired. Please login again.');
+      } else {
+        toast.error('Failed to save your answer. Check your connection and try again.');
       }
     }
-  };
+    submitAnswer(questionId, selectedOption, actualIsCorrect);
+  }, [isAuthenticated, submitAnswer]);
 
   if (loading) {
     return <LoadingSpinner fullScreen />;
@@ -348,7 +354,7 @@ const SubjectPractice = memo(() => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Subject Not Found</h1>
-          <Link to="/exams" className="btn btn-primary">Browse All Exams</Link>
+          <Link to="/" className="btn btn-primary">Browse All Exams</Link>
         </div>
       </div>
     );
@@ -405,7 +411,7 @@ const SubjectPractice = memo(() => {
             <nav className="flex items-center gap-2 text-sm text-gray-500 mb-2">
               <Link to="/" className="hover:text-primary-600">Home</Link>
               <FiChevronRight />
-              <Link to={`/exam/${examSlug}`} className="hover:text-primary-600">{exam?.shortName}</Link>
+              <Link to={`/ssc/${examSlug}-previous-year-questions`} className="hover:text-primary-600">{exam?.shortName}</Link>
               <FiChevronRight />
               <span className="text-gray-900">{subject.name}</span>
             </nav>

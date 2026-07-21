@@ -333,37 +333,4 @@ router.post('/reset', protect, asyncHandler(async (req, res) => {
   });
 }));
 
-// @route   GET /api/v1/stats/db-summary
-// @desc    Get detailed database questions summary grouped by exam, year, shift, and exam date
-// @access  Public
-router.get('/db-summary', asyncHandler(async (req, res) => {
-  const cacheKey = buildKey(CACHE_PREFIXES.STATS, 'db-summary');
-  const cached = await get(cacheKey);
-  if (cached) {
-    return res.json({ success: true, data: cached });
-  }
-
-  const { rows } = await query(`
-    SELECT 
-      e.name as exam_name,
-      e.short_name as exam_short,
-      q.year,
-      q.shift,
-      TO_CHAR(q.shift_date, 'YYYY-MM-DD') as exam_date,
-      COUNT(*)::int as count
-    FROM questions q
-    LEFT JOIN exams e ON q.exam_id = e.id
-    WHERE q.status = 'published'
-    GROUP BY e.name, e.short_name, q.year, q.shift, q.shift_date
-    ORDER BY exam_name, q.year DESC, q.shift_date DESC NULLS LAST, q.shift
-  `);
-
-  await set(cacheKey, rows, 300); // Cache stats summary for 5 minutes
-
-  res.json({
-    success: true,
-    data: rows
-  });
-}));
-
 module.exports = router;

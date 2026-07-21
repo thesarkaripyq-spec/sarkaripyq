@@ -270,9 +270,9 @@ const BestBooks = memo(() => {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                {books.map((book, bookIdx) => (
+                {books.map((book) => (
                   <BookCard 
-                    key={bookIdx} 
+                    key={book.title} 
                     book={book}
                   />
                 ))}

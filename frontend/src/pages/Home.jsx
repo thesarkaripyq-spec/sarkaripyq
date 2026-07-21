@@ -89,21 +89,21 @@ const Home = memo(() => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
               <div className="group relative bg-white dark:bg-slate-800/80 rounded-2xl p-5 sm:p-7 text-center shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-200/60 dark:border-slate-700/60">
                 <div className="w-12 h-12 mx-auto mb-3 sm:mb-4 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <FiZap className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  <FiZap className="w-6 h-6 text-blue-600 dark:text-blue-400" aria-hidden="true" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-1.5">100% Free</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">No hidden charges, ever</p>
               </div>
               <div className="group relative bg-white dark:bg-slate-800/80 rounded-2xl p-5 sm:p-7 text-center shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-200/60 dark:border-slate-700/60">
                 <div className="w-12 h-12 mx-auto mb-3 sm:mb-4 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <FiShield className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  <FiShield className="w-6 h-6 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-1.5">Built for SSC Aspirants</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">Fast, Clean &amp; Exam-Focused</p>
               </div>
               <div className="group relative bg-white dark:bg-slate-800/80 rounded-2xl p-5 sm:p-7 text-center shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-200/60 dark:border-slate-700/60">
                 <div className="w-12 h-12 mx-auto mb-3 sm:mb-4 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <FiCheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <FiCheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                 </div>
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-1.5">Practice PYQs Online</h3>
               </div>
@@ -142,7 +142,7 @@ const Home = memo(() => {
                 {exams.map((exam) => (
                   <Link
                     key={exam.slug}
-                    to={`/ssc/${exam.slug}_previous_year_questions`}
+                    to={`/ssc/${exam.slug}-previous-year-questions`}
                     className="group relative bg-white dark:bg-slate-800 rounded-xl border-2 border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 p-4 sm:p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -195,14 +195,14 @@ const Home = memo(() => {
               Frequently Asked Questions
             </h2>
             <div className="space-y-4">
-              {homeFaqs.map((faq, i) => (
-                <details key={i} className="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 open:shadow-md transition-all">
+              {homeFaqs.map((faq) => (
+                <details key={faq.question} className="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 open:shadow-md transition-all">
                   <summary className="flex items-center justify-between p-4 sm:p-5 cursor-pointer text-sm sm:text-base font-semibold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                     <span className="flex items-start gap-2">
                       <span className="text-blue-600 font-extrabold shrink-0">Q.</span>
                       {faq.question}
                     </span>
-                    <FiArrowRight className="w-4 h-4 shrink-0 text-slate-400 group-open:rotate-90 transition-transform" />
+                    <FiArrowRight className="w-4 h-4 shrink-0 text-slate-400 group-open:rotate-90 transition-transform" aria-hidden="true" />
                   </summary>
                   <div className="px-4 sm:px-5 pb-4 sm:pb-5 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed pl-8 sm:pl-9">
                     {faq.answer}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { FiMenu, FiX, FiUser, FiLogOut, FiChevronDown, FiMoon, FiSun, FiSearch, FiBook, FiGrid, FiUsers, FiDatabase } from 'react-icons/fi';
+import { FiMenu, FiX, FiUser, FiLogOut, FiChevronDown, FiMoon, FiSun, FiSearch, FiBook, FiGrid, FiUsers } from 'react-icons/fi';
 import useAuthStore from '../../store/authStore';
 
 const Header = memo(({ settings }) => {
@@ -57,11 +57,11 @@ const Header = memo(({ settings }) => {
   };
 
   const handleSearch = () => {
-    navigate('/ssc/ssc-cgl_previous_year_questions');
+    navigate('/ssc/ssc-cgl-previous-year-questions');
   };
 
   const isActive = (path) => {
-    if (path === '/ssc/ssc-cgl_previous_year_questions') {
+    if (path === '/ssc/ssc-cgl-previous-year-questions') {
       return location.pathname.startsWith('/ssc/') || location.pathname === '/practice' || location.pathname.startsWith('/ssc-');
     }
     return location.pathname === path;
@@ -69,21 +69,21 @@ const Header = memo(({ settings }) => {
 
   const navLinks = [
     { name: 'Home', path: '/', icon: FiGrid },
-    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl_previous_year_questions', icon: null },
-    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl_previous_year_questions', icon: null },
+    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl-previous-year-questions', icon: null },
+    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl-previous-year-questions', icon: null },
     { name: 'Books', path: '/best-books-for-ssc-exams', icon: FiBook },
     { name: 'Leaderboard', path: '/leaderboard', icon: FiUsers },
   ];
 
   const examQuickLinks = [
-    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl_previous_year_questions' },
-    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl_previous_year_questions' },
-    { name: 'SSC GD PYQ', path: '/ssc/ssc-gd_previous_year_questions' },
-    { name: 'SSC MTS PYQ', path: '/ssc/ssc-mts_previous_year_questions' },
-    { name: 'SSC CPO PYQ', path: '/ssc/ssc-cpo_previous_year_questions' },
-    { name: 'SSC JE PYQ', path: '/ssc/ssc-je_previous_year_questions' },
-    { name: 'SSC Selection Post PYQ', path: '/ssc/ssc-selection-post_previous_year_questions' },
-    { name: 'SSC Stenographer PYQ', path: '/ssc/ssc-stenographer_previous_year_questions' },
+    { name: 'SSC CGL PYQ', path: '/ssc/ssc-cgl-previous-year-questions' },
+    { name: 'SSC CHSL PYQ', path: '/ssc/ssc-chsl-previous-year-questions' },
+    { name: 'SSC GD PYQ', path: '/ssc/ssc-gd-previous-year-questions' },
+    { name: 'SSC MTS PYQ', path: '/ssc/ssc-mts-previous-year-questions' },
+    { name: 'SSC CPO PYQ', path: '/ssc/ssc-cpo-previous-year-questions' },
+    { name: 'SSC JE PYQ', path: '/ssc/ssc-je-previous-year-questions' },
+    { name: 'SSC Selection Post PYQ', path: '/ssc/ssc-selection-post-previous-year-questions' },
+    { name: 'SSC Stenographer PYQ', path: '/ssc/ssc-stenographer-previous-year-questions' },
   ];
 
   return (
@@ -120,7 +120,7 @@ const Header = memo(({ settings }) => {
                       : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  {link.icon && <link.icon className="w-4 h-4" />}
+                  {link.icon && <link.icon className="w-4 h-4" aria-hidden="true" />}
                   {link.name}
                 </Link>
               ))}
@@ -135,7 +135,7 @@ const Header = memo(({ settings }) => {
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Toggle theme"
               >
-                {isDark ? <FiSun size={20} /> : <FiMoon size={20} />}
+                {isDark ? <FiSun size={20} aria-hidden="true" /> : <FiMoon size={20} aria-hidden="true" />}
               </button>
 
               {/* Search Button */}
@@ -144,7 +144,7 @@ const Header = memo(({ settings }) => {
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors lg:hidden"
                 aria-label="Search"
               >
-                <FiSearch size={20} />
+                <FiSearch size={20} aria-hidden="true" />
               </button>
 
               {/* Auth Section - Desktop */}
@@ -160,7 +160,7 @@ const Header = memo(({ settings }) => {
                           {(user?.user_metadata?.full_name || user?.user_metadata?.name || user?.name || 'User').split(' ')[0]}
                         </p>
                       </div>
-                      <FiChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                      <FiChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                     </button>
 
                     {userMenuOpen && (
@@ -175,7 +175,7 @@ const Header = memo(({ settings }) => {
                             className="flex items-center gap-3 px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                             onClick={() => setUserMenuOpen(false)}
                           >
-                            <FiUser className="w-4 h-4" />
+                            <FiUser className="w-4 h-4" aria-hidden="true" />
                             <span>My Profile</span>
                           </Link>
                           <Link
@@ -183,7 +183,7 @@ const Header = memo(({ settings }) => {
                             className="flex items-center gap-3 px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                             onClick={() => setUserMenuOpen(false)}
                           >
-                            <FiUsers className="w-4 h-4" />
+                            <FiUsers className="w-4 h-4" aria-hidden="true" />
                             <span>Leaderboard</span>
                           </Link>
                         </div>
@@ -192,7 +192,7 @@ const Header = memo(({ settings }) => {
                             onClick={handleLogout}
                             className="flex items-center gap-3 w-full px-4 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           >
-                            <FiLogOut className="w-4 h-4" />
+                            <FiLogOut className="w-4 h-4" aria-hidden="true" />
                             <span>Logout</span>
                           </button>
                         </div>
@@ -225,7 +225,7 @@ const Header = memo(({ settings }) => {
                 className="lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 aria-label="Toggle menu"
               >
-                {mobileMenuOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+                {mobileMenuOpen ? <FiX size={22} aria-hidden="true" /> : <FiMenu size={22} aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -238,20 +238,27 @@ const Header = memo(({ settings }) => {
         <div 
           className="fixed inset-0 bg-black/50 z-[90] lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setMobileMenuOpen(false); }}
+          aria-hidden="true"
         />
       )}
       
       {/* Slide-in Panel */}
-      <div className={`fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-white dark:bg-slate-900 z-[100] transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        onKeyDown={(e) => { if (e.key === 'Escape') setMobileMenuOpen(false); }}
+        className={`fixed top-0 right-0 h-full w-72 max-w-[85vw] bg-white dark:bg-slate-900 z-[100] transform transition-transform duration-300 ease-in-out lg:hidden shadow-2xl ${
         mobileMenuOpen ? 'translate-x-0 visible' : 'translate-x-full invisible'
       }`}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
-          <span className="font-bold text-lg text-slate-900 dark:text-white">Menu</span>
+          <span className="font-bold text-lg text-slate-900 dark:text-white" id="mobile-menu-title">Menu</span>
           <button 
             onClick={() => setMobileMenuOpen(false)}
             className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            <FiX size={24} />
+            <FiX size={24} aria-hidden="true" />
           </button>
         </div>
         
@@ -267,7 +274,7 @@ const Header = memo(({ settings }) => {
                   : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
-              {link.icon && <link.icon className="w-5 h-5" />}
+              {link.icon && <link.icon className="w-5 h-5" aria-hidden="true" />}
               {!link.icon && <span className="w-5 h-5 flex items-center justify-center text-xs font-bold text-blue-600">Q</span>}
               {link.name}
             </Link>
@@ -298,14 +305,14 @@ const Header = memo(({ settings }) => {
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-3 px-4 min-h-[44px] text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-medium"
               >
-                <FiUser className="w-5 h-5" />
+                <FiUser className="w-5 h-5" aria-hidden="true" />
                 My Profile
               </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-3 w-full px-4 min-h-[44px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl font-medium"
               >
-                <FiLogOut className="w-5 h-5" />
+                <FiLogOut className="w-5 h-5" aria-hidden="true" />
                 Logout
               </button>
             </>

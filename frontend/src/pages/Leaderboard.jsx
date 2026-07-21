@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FiUsers, FiRefreshCw, FiAward, FiLogIn, FiUser, FiLock } from 'react-icons/fi';
 import SEOHead from '../components/Common/SEOHead';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
+import ErrorBoundary from '../components/Common/ErrorBoundary';
 import useAuthStore from '../store/authStore';
 import { statsAPI } from '../services/api';
 
@@ -54,7 +55,7 @@ const Leaderboard = memo(() => {
   const isMeInTop10 = top10.some(entry => entry.email === userEmail || entry.user_id === user?.id);
 
   return (
-    <>
+    <ErrorBoundary>
       <SEOHead
         title="Leaderboard - Top SSC Aspirants"
         description="See the top 10 SSC aspirants on SarkariPYQ based on accuracy and solved questions. Login to view your personal rank."
@@ -310,7 +311,7 @@ const Leaderboard = memo(() => {
 
         </div>
       </div>
-    </>
+    </ErrorBoundary>
   );
 });
 

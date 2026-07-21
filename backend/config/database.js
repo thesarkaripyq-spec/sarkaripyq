@@ -1,12 +1,15 @@
 const { Pool } = require('pg');
+const { logger } = require('../services/logger');
+
+const isServerless = process.env.VERCEL === '1' || process.env.SERVERLESS === 'true';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '' : '?pgbouncer=true'),
+  connectionString: process.env.DATABASE_URL + (process.env.DATABASE_URL?.includes('?') ? '' : '?pgbouncer=true'),
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: true, ca: process.env.SUPABASE_CA_CERT || undefined }
     : { rejectUnauthorized: false },
-  max: process.env.NODE_ENV === 'production' ? 25 : 5,
-  idleTimeoutMillis: 30000,
+  max: isServerless ? 1 : (process.env.NODE_ENV === 'production' ? 25 : 5),
+  idleTimeoutMillis: isServerless ? 10000 : 30000,
   connectionTimeoutMillis: 10000,
 });
 
@@ -17,7 +20,7 @@ pool.on('connect', (client) => {
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error('Unexpected error on idle client', err);
 });
 
 module.exports = { pool };

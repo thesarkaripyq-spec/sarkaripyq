@@ -1,6 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
 const { pool } = require('./database');
-const ws = require('ws');
 const { logger } = require('../services/logger');
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -12,13 +11,11 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false },
-  realtime: { transport: ws }
+  auth: { persistSession: false }
 });
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws }
+  auth: { autoRefreshToken: false, persistSession: false }
 });
 
 const query = async (text, params) => {
@@ -31,8 +28,4 @@ const query = async (text, params) => {
   return res;
 };
 
-const getClient = async () => {
-  return await pool.connect();
-};
-
-module.exports = { pool, query, getClient, supabase, supabaseAdmin };
+module.exports = { pool, query, supabase, supabaseAdmin };

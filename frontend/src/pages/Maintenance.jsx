@@ -8,6 +8,8 @@ const Maintenance = () => {
         title="Under Maintenance"
         description="SarkariPYQ is temporarily under maintenance. We'll be back soon with improvements."
         noIndex
+        pageUrl="/maintenance"
+        ogImage="/ssc-logo.webp"
       />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 max-w-md w-full text-center">

@@ -40,28 +40,6 @@ describe('Auth Store', () => {
     });
   });
 
-  describe('isAdmin check', () => {
-    test('should identify non-admin user', () => {
-      useAuthStore.setState({ user: { id: 'user123', email: 'test@example.com', role: 'user' } });
-      expect(useAuthStore.getState().isAdmin()).toBe(false);
-    });
-
-    test('should identify admin user', () => {
-      useAuthStore.setState({ user: { id: 'admin123', email: 'admin@example.com', role: 'admin' } });
-      expect(useAuthStore.getState().isAdmin()).toBe(true);
-    });
-
-    test('should identify superadmin user', () => {
-      useAuthStore.setState({ user: { id: 'super123', email: 'super@example.com', role: 'superadmin' } });
-      expect(useAuthStore.getState().isAdmin()).toBe(true);
-    });
-
-    test('should return false if user is null', () => {
-      useAuthStore.setState({ user: null });
-      expect(useAuthStore.getState().isAdmin()).toBeNull();
-    });
-  });
-
   describe('clearError', () => {
     test('should clear error message', () => {
       useAuthStore.setState({ error: 'Some error message' });

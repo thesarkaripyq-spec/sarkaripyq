@@ -51,9 +51,9 @@ const FAQ = memo(() => {
         </div>
 
         <div className='space-y-4'>
-          {faqs.map((faq, idx) => (
+          {faqs.map((faq) => (
             <details 
-              key={idx} 
+              key={faq.q} 
               className='group bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden'
             >
               <summary className='flex items-center justify-between cursor-pointer p-5 font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-slate-800'>

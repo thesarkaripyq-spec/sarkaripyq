@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+import { Link } from 'react-router-dom';
 import SEOHead from '../components/Common/SEOHead';
 
 const Disclaimer = memo(() => {
@@ -9,6 +10,12 @@ const Disclaimer = memo(() => {
         description='SarkariPYQ Disclaimer - Important information about our independent SSC previous year questions practice platform. SarkariPYQ is not affiliated with SSC.'
         pageUrl="/disclaimer"
         ogImage="/ssc-logo.webp"
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Disclaimer - SarkariPYQ",
+          "description": "Important information about our independent SSC previous year questions practice platform."
+        }}
       />
       <div className='max-w-3xl mx-auto px-4 py-10'>
         <h1 className='text-3xl font-bold mb-6'>Disclaimer</h1>

@@ -86,7 +86,7 @@ const TermsOfService = memo(() => {
             <h2 className='text-xl font-semibold mb-3 text-slate-800 dark:text-slate-200'>11. Contact Us</h2>
             <p>If you have any questions about these Terms of Service, please contact us at:</p>
             <p className='mt-2'>
-              <strong>Email:</strong> contact@sarkaripyq.com<br />
+              <strong>Email:</strong> thesarkaripyq@gmail.com<br />
               <strong>Website:</strong> https://sarkaripyq.com
             </p>
           </section>

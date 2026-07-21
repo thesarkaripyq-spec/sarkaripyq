@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import katex from 'katex';
 
 const katexCache = new Map();
+const MAX_CACHE_SIZE = 500;
 
 const renderKaTeX = (latex, displayMode) => {
   const cacheKey = `${displayMode}:${latex}`;
@@ -13,6 +14,10 @@ const renderKaTeX = (latex, displayMode) => {
       throwOnError: false,
       trust: true
     });
+    if (katexCache.size >= MAX_CACHE_SIZE) {
+      const firstKey = katexCache.keys().next().value;
+      katexCache.delete(firstKey);
+    }
     katexCache.set(cacheKey, result);
     return result;
   } catch {

@@ -3,8 +3,6 @@ import { persist } from 'zustand/middleware';
 import { supabase } from '../supabase';
 import { authAPI } from '../services/api';
 
-const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || '';
-
 const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -26,10 +24,9 @@ const useAuthStore = create(
                 .select('role')
                 .eq('email', user.email)
                 .maybeSingle();
-              const role = dbUser?.role || (user.email === ADMIN_EMAIL ? 'admin' : 'user');
               const mergedUser = {
                 ...user,
-                role
+                role: dbUser?.role || 'user'
               };
               set({ user: mergedUser, isAuthenticated: true });
             } else {
@@ -41,79 +38,6 @@ const useAuthStore = create(
         } catch (error) {
           console.error('Init auth error:', error);
           set({ user: null, isAuthenticated: false });
-        }
-      },
-
-      loginWithOTP: async (phone) => {
-        set({ isLoading: true, error: null });
-        try {
-          set({ isLoading: false });
-          return { success: false, error: 'OTP login is not available. Please use email/password or Google login.' };
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false, error: error.message };
-        }
-      },
-
-      verifyOTP: async (phone, otp) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { data: user, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('phone', phone)
-            .maybeSingle();
-
-          set({ isLoading: false });
-
-          if (error) {
-            return { success: false, error: error.message };
-          }
-
-          if (user) {
-            return { success: true, isNewUser: false, user };
-          }
-          return { success: true, isNewUser: true };
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false, error: error.message };
-        }
-      },
-
-      createUser: async (phone, name, email) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { data, error } = await supabase
-            .from('users')
-            .insert({
-              phone,
-              name,
-              email: email || null,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          set({ user: data, isAuthenticated: true, isLoading: false });
-          return { success: true, user: data };
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false, error: error.message };
-        }
-      },
-
-      loginWithPhone: async (phone) => {
-        set({ isLoading: true, error: null });
-        try {
-          // Phone-only login without password is disabled for production
-          // Use the standard login flow instead
-          set({ isLoading: false });
-          return { success: false, error: 'Phone login is not available. Please use email/password or Google login.' };
-        } catch (error) {
-          set({ error: error.message, isLoading: false });
-          return { success: false, error: error.message };
         }
       },
 
@@ -148,11 +72,9 @@ const useAuthStore = create(
               .eq('email', loggedInUser.email)
               .maybeSingle();
 
-            const role = existingUser?.role || (loggedInUser.email === ADMIN_EMAIL ? 'admin' : 'user');
-
             const mergedUser = {
               ...loggedInUser,
-              role: loggedInUser.email === ADMIN_EMAIL ? 'admin' : role
+              role: existingUser?.role || 'user'
             };
 
             set({ user: mergedUser, isAuthenticated: true, isLoading: false });
@@ -186,11 +108,9 @@ const useAuthStore = create(
             .eq('email', email)
             .maybeSingle();
 
-          const role = existingUser?.role || (email === ADMIN_EMAIL ? 'admin' : 'user');
-
           const mergedUser = {
             ...data.user,
-            role: email === ADMIN_EMAIL ? 'admin' : role
+            role: existingUser?.role || 'user'
           };
 
           set({ user: mergedUser, isAuthenticated: true, isLoading: false });
@@ -228,10 +148,7 @@ const useAuthStore = create(
         }
       },
 
-      isAdmin: () => {
-        const user = get().user;
-        return user && (user.role === 'admin' || user.role === 'superadmin');
-      }
+
     }),
     {
       name: 'auth-storage',

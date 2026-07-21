@@ -1,5 +1,4 @@
 const NodeCache = require('node-cache');
-const { logger } = require('./logger');
 
 const memoryCache = new NodeCache({ stdTTL: 300, checkperiod: 60, useClones: true });
 
@@ -47,20 +46,6 @@ async function del(key) {
   memoryCache.del(key);
 }
 
-async function delPattern(pattern) {
-  const normalizedPattern = pattern.replace('*', '');
-  const keys = memoryCache.keys().filter(k => k.startsWith(normalizedPattern));
-  keys.forEach(k => memoryCache.del(k));
-}
-
-function getStats() {
-  return {
-    memory: memoryCache.getStats(),
-    redisReady: false,
-    memoryKeys: memoryCache.keys().length,
-  };
-}
-
 module.exports = {
-  get, set, del, delPattern, getStats, buildKey, CACHE_PREFIXES, memoryCache,
+  get, set, del, buildKey, CACHE_PREFIXES,
 };

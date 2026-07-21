@@ -65,10 +65,12 @@
 
 
     <!-- Preconnect / DNS-Prefetch to critical origins -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="preconnect" href="https://uomoukrmlkdftwwoxguf.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://*.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://*.supabase.co" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
 
@@ -104,7 +106,7 @@
       "inLanguage": ["hi", "en"],
       "potentialAction": {
         "@type": "SearchAction",
-        "target": "https://sarkaripyq.com/ssc/ssc-cgl_previous_year_questions?search={search_term_string}",
+        "target": "https://sarkaripyq.com/ssc/ssc-cgl-previous-year-questions?search={search_term_string}",
         "query-input": "required name=search_term_string"
       }
     }

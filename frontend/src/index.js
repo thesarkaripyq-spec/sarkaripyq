@@ -11,8 +11,6 @@ import useAuthStore from './store/authStore';
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
-const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || '';
-
 // Listen for auth state changes (session expiry, logout from other tabs, etc.)
 supabase.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_OUT') {
@@ -27,7 +25,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
           .select('role')
           .eq('email', session.user.email)
           .maybeSingle();
-        role = dbUser?.role || (session.user.email === ADMIN_EMAIL ? 'admin' : 'user');
+        role = dbUser?.role || 'user';
       }
       const mergedUser = { ...session.user, role };
       useAuthStore.setState({ user: mergedUser, isAuthenticated: true });

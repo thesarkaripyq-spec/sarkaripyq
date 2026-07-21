@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { body, param } = require('express-validator');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
-const { supabase, supabaseAdmin, query } = require('../config/supabase');
-const { protect, adminOnly } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
-const { get, set, delPattern, buildKey, CACHE_PREFIXES } = require('../services/cacheService');
+const { supabase, query } = require('../config/supabase');
+const { get, set, buildKey, CACHE_PREFIXES } = require('../services/cacheService');
+const { logger } = require('../services/logger');
 
 function parseShiftParam(shift) {
   if (!shift) return { shiftName: null, examDate: null };
@@ -321,7 +319,7 @@ router.get('/:slug/tiers', asyncHandler(async (req, res) => {
     const { rows } = await query(sql, params);
     tiers = rows.map(r => r.tier).filter(Boolean);
   } catch (e) {
-    // tier column may not exist yet; return fallback
+    logger.warn('Tiers query failed (column may not exist yet): ' + e.message);
   }
 
   await set(cacheKey, tiers, 600); // Cache tiers for 10 minutes
@@ -392,125 +390,6 @@ router.get('/:slug/shifts', asyncHandler(async (req, res) => {
   await set(cacheKey, shifts, 600); // Cache shifts for 10 minutes
 
   res.json({ success: true, data: shifts });
-}));
-
-// ============ ADMIN ROUTES ============
-
-// @route   POST /api/v1/exams
-// @desc    Create exam (Admin)
-// @access  Private/Admin
-router.post('/', [
-  protect,
-  adminOnly,
-  body('name').trim().notEmpty().withMessage('Exam name is required'),
-  body('slug').trim().notEmpty().withMessage('Exam slug is required'),
-  body('short_name').optional().trim(),
-  body('description').optional().trim(),
-  body('icon').optional().trim(),
-  body('cover_image').optional().trim(),
-  body('sort_order').optional().isInt({ min: 0 }),
-  body('is_popular').optional().isBoolean(),
-  validate
-], asyncHandler(async (req, res) => {
-  const { name, slug } = req.body;
-  if (!name || !slug) {
-    throw new AppError('Exam name and slug are required', 400);
-  }
-
-  const { data: exam, error } = await supabaseAdmin
-    .from('exams')
-    .insert({
-      name,
-      slug,
-      short_name: req.body.short_name || name,
-      description: req.body.description || '',
-      icon: req.body.icon || '',
-      cover_image: req.body.cover_image || '',
-      sort_order: req.body.sort_order || 0,
-      is_popular: req.body.is_popular || false
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  // Invalidate exam-related caches
-  await delPattern(CACHE_PREFIXES.EXAMS);
-  await delPattern(CACHE_PREFIXES.EXAM);
-
-  res.status(201).json({
-    success: true,
-    message: 'Exam created successfully',
-    data: exam
-  });
-}));
-
-// @route   PUT /api/v1/exams/:id
-// @desc    Update exam (Admin)
-// @access  Private/Admin
-router.put('/:id', [
-  protect,
-  adminOnly,
-  body('name').optional().trim().notEmpty(),
-  body('slug').optional().trim().notEmpty(),
-  body('short_name').optional().trim(),
-  body('description').optional().trim(),
-  body('icon').optional().trim(),
-  body('cover_image').optional().trim(),
-  body('sort_order').optional().isInt({ min: 0 }),
-  body('is_popular').optional().isBoolean(),
-  body('is_active').optional().isBoolean(),
-  validate
-], asyncHandler(async (req, res) => {
-  const allowedFields = ['name', 'slug', 'short_name', 'description', 'icon', 'cover_image', 'sort_order', 'is_popular', 'is_active'];
-  const updates = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updates[field] = req.body[field];
-    }
-  }
-
-  const { data: exam, error } = await supabaseAdmin
-    .from('exams')
-    .update(updates)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error || !exam) {
-    throw new AppError('Exam not found', 404);
-  }
-
-  // Invalidate exam-related caches
-  await delPattern(CACHE_PREFIXES.EXAMS);
-  await delPattern(CACHE_PREFIXES.EXAM);
-
-  res.json({
-    success: true,
-    message: 'Exam updated successfully',
-    data: exam
-  });
-}));
-
-// @route   DELETE /api/v1/exams/:id
-// @desc    Delete exam (Admin)
-// @access  Private/Admin
-router.delete('/:id', [protect, adminOnly], asyncHandler(async (req, res) => {
-  const { error } = await supabaseAdmin
-    .from('exams')
-    .delete()
-    .eq('id', req.params.id);
-
-  if (error) throw error;
-
-  // Invalidate exam-related caches
-  await delPattern(CACHE_PREFIXES.EXAMS);
-  await delPattern(CACHE_PREFIXES.EXAM);
-
-  res.json({
-    success: true,
-    message: 'Exam deleted successfully'
-  });
 }));
 
 module.exports = router;

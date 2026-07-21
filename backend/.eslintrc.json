@@ -10,10 +10,10 @@
     "ecmaVersion": "latest"
   },
   "rules": {
-    "no-unused-vars": "off",
-    "no-console": "off",
-    "no-useless-escape": "off",
-    "no-empty": "off",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-console": "warn",
+    "no-useless-escape": "warn",
+    "no-empty": "warn",
     "no-redeclare": "error"
   }
 }

@@ -153,17 +153,17 @@ const EXAM_CONTENT = {
 };
 
 const RELATED_EXAMS = [
-  { name: 'SSC CGL PYQ', slug: 'ssc-cgl', path: '/ssc/ssc-cgl_previous_year_questions' },
-  { name: 'SSC CHSL PYQ', slug: 'ssc-chsl', path: '/ssc/ssc-chsl_previous_year_questions' },
-  { name: 'SSC GD PYQ', slug: 'ssc-gd', path: '/ssc/ssc-gd_previous_year_questions' },
-  { name: 'SSC MTS PYQ', slug: 'ssc-mts', path: '/ssc/ssc-mts_previous_year_questions' },
-  { name: 'SSC CPO PYQ', slug: 'ssc-cpo', path: '/ssc/ssc-cpo_previous_year_questions' },
-  { name: 'SSC JE PYQ', slug: 'ssc-je', path: '/ssc/ssc-je_previous_year_questions' },
-  { name: 'SSC Selection Post PYQ', slug: 'ssc-selection-post', path: '/ssc/ssc-selection-post_previous_year_questions' },
-  { name: 'SSC Stenographer PYQ', slug: 'ssc-stenographer', path: '/ssc/ssc-stenographer_previous_year_questions' },
+  { name: 'SSC CGL PYQ', slug: 'ssc-cgl', path: '/ssc/ssc-cgl-previous-year-questions' },
+  { name: 'SSC CHSL PYQ', slug: 'ssc-chsl', path: '/ssc/ssc-chsl-previous-year-questions' },
+  { name: 'SSC GD PYQ', slug: 'ssc-gd', path: '/ssc/ssc-gd-previous-year-questions' },
+  { name: 'SSC MTS PYQ', slug: 'ssc-mts', path: '/ssc/ssc-mts-previous-year-questions' },
+  { name: 'SSC CPO PYQ', slug: 'ssc-cpo', path: '/ssc/ssc-cpo-previous-year-questions' },
+  { name: 'SSC JE PYQ', slug: 'ssc-je', path: '/ssc/ssc-je-previous-year-questions' },
+  { name: 'SSC Selection Post PYQ', slug: 'ssc-selection-post', path: '/ssc/ssc-selection-post-previous-year-questions' },
+  { name: 'SSC Stenographer PYQ', slug: 'ssc-stenographer', path: '/ssc/ssc-stenographer-previous-year-questions' },
 ];
 
-const SEOContentSection = memo(({ examSlug, examName }) => {
+const SEOContentSection = memo(({ examSlug }) => {
   const content = EXAM_CONTENT[examSlug];
   if (!content || !examSlug) return null;
 
@@ -205,7 +205,7 @@ const SEOContentSection = memo(({ examSlug, examName }) => {
           {content.subjects.map((subject) => (
             <Link
               key={subject.slug}
-              to={`/ssc/${examSlug}/${subject.slug}_previous_year_questions`}
+              to={`/ssc/${examSlug}/${subject.slug}-previous-year-questions`}
               className="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
             >
               <h4 className="font-semibold text-sm text-blue-600 dark:text-blue-400">{subject.name}</h4>
@@ -224,7 +224,7 @@ const SEOContentSection = memo(({ examSlug, examName }) => {
           {content.years.map((year) => (
             <Link
               key={year}
-              to={`/ssc/${examSlug}/${year}_previous_year_questions`}
+              to={`/ssc/${examSlug}/${year}-previous-year-questions`}
               className="inline-block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
             >
               {content.name} {year} Paper

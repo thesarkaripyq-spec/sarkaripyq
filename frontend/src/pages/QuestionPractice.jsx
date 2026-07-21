@@ -11,6 +11,7 @@ import { ALLOWED_SUBJECTS } from '../constants/subjects';
 import { EXAM_MAPPINGS } from '../constants/examMappings';
 import usePracticeStore from '../store/practiceStore';
 import useAuthStore from '../store/authStore';
+import { FREE_ATTEMPT_LIMIT } from '../constants';
 import toast from 'react-hot-toast';
 
 
@@ -81,9 +82,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
   const [translatedQuestions, setTranslatedQuestions] = useState([]);
   const [translatingQuestions, setTranslatingQuestions] = useState(false);
 
-  const freeAttemptLimit = 10;
-  // eslint-disable-next-line no-unused-vars
-  const pageSize = 10;
+  const freeAttemptLimit = FREE_ATTEMPT_LIMIT;
 
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1', 10));
   const [totalPages, setTotalPages] = useState(1);
@@ -98,7 +97,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
 
     const stripSuffix = (slug) => {
       if (!slug) return '';
-      return slug.replace(/_previous_year_questio(ns|sn|n)?$/, '').replace(/_pyq(s)?$/, '');
+      return slug.replace(/-previous-year-questio(ns|sn|n)?$/, '').replace(/-pyq(s)?$/, '');
     };
 
     if (propExamSlug) {
@@ -158,17 +157,17 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
 
     if (subject && topic) {
       const topicSlug = topic.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      navigate(`/ssc/${activeExam}/${subject}/${topicSlug}_previous_year_questions${querySuffix}`);
+      navigate(`/ssc/${activeExam}/${subject}/${topicSlug}-previous-year-questions${querySuffix}`);
     } else if (subject) {
-      navigate(`/ssc/${activeExam}/${subject}_previous_year_questions${querySuffix}`);
+      navigate(`/ssc/${activeExam}/${subject}-previous-year-questions${querySuffix}`);
     } else if (year) {
-      navigate(`/ssc/${activeExam}/${year}_previous_year_questions${querySuffix}`);
+      navigate(`/ssc/${activeExam}/${year}-previous-year-questions${querySuffix}`);
     } else {
-      navigate(`/ssc/${activeExam}_previous_year_questions${querySuffix}`);
+      navigate(`/ssc/${activeExam}-previous-year-questions${querySuffix}`);
     }
   }, [navigate]);
 
-  const fallbackExams = useMemo(() => [
+  const fallbackExams = [
     { slug: 'ssc-cgl', name: 'SSC CGL', shortName: 'SSC CGL' },
     { slug: 'ssc-chsl', name: 'SSC CHSL', shortName: 'SSC CHSL' },
     { slug: 'ssc-gd', name: 'SSC GD', shortName: 'SSC GD' },
@@ -176,7 +175,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     { slug: 'ssc-mts', name: 'SSC MTS', shortName: 'SSC MTS' },
     { slug: 'ssc-stenographer', name: 'SSC Stenographer', shortName: 'SSC Stenographer' },
     { slug: 'ssc-selection-post', name: 'SSC Selection Post', shortName: 'SSC Selection Post' },
-  ], []);
+  ];
 
   const examList = useMemo(() => {
     return (exams?.length) ? exams : fallbackExams;
@@ -241,22 +240,22 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
 
       if (subjectParam && topicParam) {
         const topicSlug = topicParam.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-        navigate(`/ssc/${activeExam}/${subjectParam}/${topicSlug}_previous_year_questions${urlSuffix}`, { replace: true });
+        navigate(`/ssc/${activeExam}/${subjectParam}/${topicSlug}-previous-year-questions${urlSuffix}`, { replace: true });
       } else if (subjectParam) {
-        navigate(`/ssc/${activeExam}/${subjectParam}_previous_year_questions${urlSuffix}`, { replace: true });
+        navigate(`/ssc/${activeExam}/${subjectParam}-previous-year-questions${urlSuffix}`, { replace: true });
       } else if (yearParam) {
-        navigate(`/ssc/${activeExam}/${yearParam}_previous_year_questions${urlSuffix}`, { replace: true });
+        navigate(`/ssc/${activeExam}/${yearParam}-previous-year-questions${urlSuffix}`, { replace: true });
       } else {
-        navigate(`/ssc/${activeExam}_previous_year_questions${urlSuffix}`, { replace: true });
+        navigate(`/ssc/${activeExam}-previous-year-questions${urlSuffix}`, { replace: true });
       }
     }
   }, [routeParams, searchParams, examSlugWithSuffix, examSlug, navigate]);
 
-  const FILTER_FALLBACKS = useMemo(() => ({
+  const FILTER_FALLBACKS = {
     years: [2025, 2024, 2023, 2022],
     tiers: ['Tier-I', 'Tier-II', 'Tier-III', 'Tier-IV'],
     shifts: ['Shift 1', 'Shift 2', 'Shift 3']
-  }), []);
+  };
 
   // Fetch exams on mount only
   useEffect(() => {
@@ -524,12 +523,31 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     setSearchParams(params);
   }, [searchParams, setSearchParams, totalPages, currentPage]);
 
-  const handleAnswer = useCallback(async (questionId, selectedOption, isCorrect) => {
+  const handleAnswer = useCallback(async (questionId, selectedOption) => {
     if (!isAuthenticated && sessionStats.attempted >= freeAttemptLimit) {
       setShowLoginGate(true);
       return;
     }
-    submitAnswer(questionId, selectedOption, isCorrect);
+
+    let actualIsCorrect = false;
+    try {
+      const response = await questionsAPI.submitAttempt(questionId, {
+        selectedAnswer: selectedOption,
+        timeSpent: 30
+      });
+      if (response?.data?.correct != null) {
+        actualIsCorrect = response.data.correct;
+      }
+    } catch (error) {
+      console.error('Error submitting answer:', error);
+      if (error.message?.includes('session has expired')) {
+        useAuthStore.getState().logout();
+        toast.error('Session expired. Please login again.');
+      } else {
+        toast.error('Failed to save your answer. Check your connection and try again.');
+      }
+    }
+    submitAnswer(questionId, selectedOption, actualIsCorrect);
 
     // Update Streak and Solved Today Counters locally
     const newSolved = solvedToday + 1;
@@ -547,23 +565,6 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
       localStorage.setItem('practice_analytics', JSON.stringify(localAnalytics));
     } catch (e) {
       console.error(e);
-    }
-
-    if (isAuthenticated) {
-      try {
-        await questionsAPI.submitAttempt(questionId, {
-          selectedAnswer: selectedOption,
-          timeSpent: 30
-        });
-      } catch (error) {
-        console.error('Error submitting answer:', error);
-        if (error.message?.includes('session has expired')) {
-          useAuthStore.getState().logout();
-          toast.error('Session expired. Please login again.');
-        } else {
-          toast.error('Failed to save your answer. Check your connection and try again.');
-        }
-      }
     }
   }, [isAuthenticated, sessionStats.attempted, submitAnswer, solvedToday, questions]);
 
@@ -674,20 +675,20 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
   const canonicalUrl = useMemo(() => {
     const origin = window.location.origin;
     if (propExamSlug) {
-      return `${origin}/${propExamSlug}-pyq`;
+      return `${origin}/ssc/${propExamSlug}-previous-year-questions`;
     }
     const activeExam = selectedExam || 'ssc-cgl';
     if (selectedSubject && selectedTopic) {
       const topicSlug = selectedTopic.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      return `${origin}/ssc/${activeExam}/${selectedSubject}/${topicSlug}_previous_year_questions`;
+      return `${origin}/ssc/${activeExam}/${selectedSubject}/${topicSlug}-previous-year-questions`;
     }
     if (selectedSubject) {
-      return `${origin}/ssc/${activeExam}/${selectedSubject}_previous_year_questions`;
+      return `${origin}/ssc/${activeExam}/${selectedSubject}-previous-year-questions`;
     }
     if (selectedYear) {
-      return `${origin}/ssc/${activeExam}/${selectedYear}_previous_year_questions`;
+      return `${origin}/ssc/${activeExam}/${selectedYear}-previous-year-questions`;
     }
-    return `${origin}/ssc/${activeExam}_previous_year_questions`;
+    return `${origin}/ssc/${activeExam}-previous-year-questions`;
   }, [selectedExam, selectedSubject, selectedTopic, selectedYear, propExamSlug]);
 
   const examFaqs = useMemo(() => {
@@ -726,7 +727,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
         "url": origin,
         "potentialAction": {
           "@type": "SearchAction",
-          "target": `${origin}/ssc/ssc-cgl_previous_year_questions?search={search_term_string}`,
+          "target": `${origin}/ssc/ssc-cgl-previous-year-questions?search={search_term_string}`,
           "query-input": "required name=search_term_string"
         }
       },
@@ -743,7 +744,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     const breadcrumbs = [
       { "@type": "ListItem", "position": 1, "name": "Home", "item": origin }
     ];
-    let currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}_previous_year_questions`;
+    let currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}-previous-year-questions`;
     breadcrumbs.push({
       "@type": "ListItem",
       "position": 2,
@@ -752,7 +753,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     });
 
     if (selectedSubjectName) {
-      currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}_previous_year_questions`;
+      currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}-previous-year-questions`;
       breadcrumbs.push({
         "@type": "ListItem",
         "position": 3,
@@ -763,7 +764,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
 
     if (selectedTopic) {
       const topicSlug = selectedTopic.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-      currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}/${topicSlug}_previous_year_questions`;
+      currentPath = `${origin}/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}/${topicSlug}-previous-year-questions`;
       breadcrumbs.push({
         "@type": "ListItem",
         "position": 4,
@@ -814,7 +815,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
             "@type": "ListItem",
             "position": idx + 1,
             "name": textVal.slice(0, 100) + '...',
-            "url": `${origin}/ssc/${selectedExam || 'ssc-cgl'}_previous_year_questions` // Points to search list page
+            "url": `${origin}/ssc/${selectedExam || 'ssc-cgl'}-previous-year-questions` // Points to search list page
           };
         })
       });
@@ -845,7 +846,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
             <Link to="/" className="hover:text-blue-600 transition-colors">Home</Link>
             <span>/</span>
             <Link 
-              to={`/ssc/${selectedExam || 'ssc-cgl'}_previous_year_questions`} 
+              to={`/ssc/${selectedExam || 'ssc-cgl'}-previous-year-questions`} 
               className={`hover:text-blue-600 transition-colors ${(!selectedSubject && !selectedYear && !selectedTopic) ? 'text-slate-900 font-bold' : ''}`}
             >
               {selectedExamName || 'SSC CGL'}
@@ -855,7 +856,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
               <>
                 <span>/</span>
                 <Link 
-                  to={`/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}_previous_year_questions`}
+                  to={`/ssc/${selectedExam || 'ssc-cgl'}/${selectedSubject}-previous-year-questions`}
                   className={`hover:text-blue-600 transition-colors ${!selectedTopic ? 'text-slate-900 font-bold' : ''}`}
                 >
                   {selectedSubjectName}
@@ -1333,7 +1334,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
                 <ul className="space-y-2 text-sm text-blue-600">
                   {(exams || []).filter(e => e.slug !== selectedExam).map(exam => (
                     <li key={exam.slug}>
-                      <Link to={`/ssc/${exam.slug}_previous_year_questions`} className="hover:underline hover:text-blue-700 transition-colors">
+                      <Link to={`/ssc/${exam.slug}-previous-year-questions`} className="hover:underline hover:text-blue-700 transition-colors">
                         {exam.name || exam.shortName} Previous Year Papers
                       </Link>
                     </li>
@@ -1367,7 +1368,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
                       { name: 'General Awareness', slug: 'general-awareness' }
                     ].map(sub => (
                       <li key={sub.slug}>
-                        <Link to={`/ssc/${selectedExam}/${sub.slug}_previous_year_questions`} className="hover:underline hover:text-blue-700 transition-colors">
+                        <Link to={`/ssc/${selectedExam}/${sub.slug}-previous-year-questions`} className="hover:underline hover:text-blue-700 transition-colors">
                           {selectedExamName} {sub.name} PYQs
                         </Link>
                       </li>
@@ -1382,7 +1383,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
                   <ul className="space-y-2 text-sm text-blue-600">
                     {[2025, 2024, 2023, 2022].map(year => (
                       <li key={year}>
-                        <Link to={`/ssc/${selectedExam}/${year}_previous_year_questions`} className="hover:underline hover:text-blue-700 transition-colors">
+                        <Link to={`/ssc/${selectedExam}/${year}-previous-year-questions`} className="hover:underline hover:text-blue-700 transition-colors">
                           {selectedExamName} {year} Practice Set
                         </Link>
                       </li>

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-console */
 // SARKARIPYQ Database Migration Runner
 // Usage:
 //   node scripts/migrate.js              # Apply pending migrations
@@ -39,14 +40,6 @@ async function getApplied() {
     `SELECT name, checksum, applied_at, duration_ms FROM ${MIGRATIONS_TABLE} ORDER BY name`
   );
   return rows;
-}
-
-async function isApplied(name) {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM ${MIGRATIONS_TABLE} WHERE name = $1`,
-    [name]
-  );
-  return rows.length > 0;
 }
 
 async function recordApplied(name, checksum, durationMs) {

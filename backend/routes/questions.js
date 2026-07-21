@@ -1,19 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { body, param, query } = require('express-validator');
-const { protect, optionalAuth, adminOnly } = require('../middleware/auth');
+const { body: _body, param: _param } = require('express-validator');
+const { optionalAuth } = require('../middleware/auth');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { validate } = require('../middleware/validate');
 const { supabase, supabaseAdmin } = require('../config/supabase');
 const { query: pgQuery } = require('../config/supabase');
-const { get: cacheGet, set: cacheSet, delPattern: cacheDelPattern, buildKey, CACHE_PREFIXES } = require('../services/cacheService');
+const { get: cacheGet, set: cacheSet, buildKey, CACHE_PREFIXES } = require('../services/cacheService');
 const { logger } = require('../services/logger');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const IMG_SRC_REGEX = /src=["'](img_[a-zA-Z0-9_\.\-]+)["']/gi;
-const IMG_URL_REGEX = /^(img_[a-zA-Z0-9_\.\-]+)$/i;
-const EXTERNAL_IMG_REGEX = /<img[^>]+src=["']https?:\/\/(?!(?:[^"']*supabase)[^"']*)[^"']+["'][^>]*>/gi;
-
+const IMG_SRC_REGEX = /src=["'](img_[a-zA-Z0-9_.-]+)["']/gi;
+const IMG_URL_REGEX = /^(img_[a-zA-Z0-9_.-]+)$/i;
 function resolveImageUrls(html, examSlug) {
   if (!html) return html;
   // First resolve local img_ references to Supabase CDN
@@ -179,8 +177,8 @@ router.get('/', [optionalAuth], asyncHandler(async (req, res) => {
   const { rows } = await pgQuery(
     random === 'true'
       ? `SELECT ${COLUMNS}, COUNT(*) OVER() as total_count FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause} ORDER BY random() LIMIT $${idx}`
-      : `SELECT ${COLUMNS}, COUNT(*) OVER() as total_count FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause} ORDER BY q.created_at DESC, q.id ASC OFFSET ${offset} LIMIT ${limitNum}`,
-    random === 'true' ? [...params, limitNum] : params
+      : `SELECT ${COLUMNS}, COUNT(*) OVER() as total_count FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause} ORDER BY q.created_at DESC, q.id ASC OFFSET $${idx} LIMIT $${idx+1}`,
+    random === 'true' ? [...params, limitNum] : [...params, offset, limitNum]
   );
 
   const count = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
@@ -210,6 +208,11 @@ router.get('/', [optionalAuth], asyncHandler(async (req, res) => {
   finalData = finalData.map(resolveQuestionImages);
   finalData = await resolveTopics(finalData);
 
+  const isAuthenticated = !!req.user;
+  if (!isAuthenticated) {
+    finalData = finalData.map(({ correct_answer: _correct_answer, ...rest }) => rest);
+  }
+
   res.set('Cache-Control', 'public, max-age=120, s-maxage=600, stale-while-revalidate=1800');
 
   const responseJson = {
@@ -236,6 +239,7 @@ router.get('/', [optionalAuth], asyncHandler(async (req, res) => {
 // @access  Public/Private
 router.get('/:id', [validate, optionalAuth], asyncHandler(async (req, res) => {
   const isUser = !req.user || req.user.role === 'user';
+  const isAuthenticated = !!req.user;
   const cacheKey = buildKey(CACHE_PREFIXES.QUESTION, req.params.id, isUser ? 'public' : 'admin');
   
   const cachedQuestion = await cacheGet(cacheKey);
@@ -258,7 +262,11 @@ router.get('/:id', [validate, optionalAuth], asyncHandler(async (req, res) => {
   }
 
   const resolved = await resolveTopics([resolveQuestionImages(question)]);
-  const responseJson = { success: true, data: resolved[0] };
+  const questionData = resolved[0];
+  if (!isAuthenticated && questionData) {
+    delete questionData.correct_answer;
+  }
+  const responseJson = { success: true, data: questionData };
   
   await cacheSet(cacheKey, responseJson, 600);
 
@@ -268,7 +276,7 @@ router.get('/:id', [validate, optionalAuth], asyncHandler(async (req, res) => {
 // @route   POST /api/v1/questions/:id/attempt
 // @desc    Submit answer for a question
 // @access  Private
-router.post('/:id/attempt', protect, asyncHandler(async (req, res) => {
+router.post('/:id/attempt', optionalAuth, asyncHandler(async (req, res) => {
   const { selectedAnswer, timeSpent = 0, sessionId } = req.body;
 
   const { data: question, error: qError } = await supabase
@@ -284,23 +292,24 @@ router.post('/:id/attempt', protect, asyncHandler(async (req, res) => {
 
   const isCorrect = selectedAnswer === question.correct_answer;
 
-  const result = await supabaseAdmin
-    .from('attempts')
-    .insert({
-      user_id: req.user.id,
-      question_id: question.id,
-      exam_id: question.exam_id,
-      subject_id: question.subject_id,
-      selected_answer: selectedAnswer,
-      correct_answer: question.correct_answer,
-      is_correct: isCorrect,
-      time_spent: timeSpent,
-      session_id: sessionId || null
-    });
+  if (req.user) {
+    const result = await supabaseAdmin
+      .from('attempts')
+      .insert({
+        user_id: req.user.id,
+        question_id: question.id,
+        exam_id: question.exam_id,
+        subject_id: question.subject_id,
+        selected_answer: selectedAnswer,
+        correct_answer: question.correct_answer,
+        is_correct: isCorrect,
+        time_spent: timeSpent,
+        session_id: sessionId || null
+      });
 
-  if (result.error) {
-    logger.error('Error saving attempt in database: ' + (result.error.message || JSON.stringify(result.error)));
-    throw new AppError('Failed to save attempt: ' + result.error.message, 500);
+    if (result.error) {
+      logger.error('Error saving attempt in database: ' + (result.error.message || JSON.stringify(result.error)));
+    }
   }
 
   res.json({
@@ -310,241 +319,6 @@ router.post('/:id/attempt', protect, asyncHandler(async (req, res) => {
       correctAnswer: question.correct_answer,
       explanation: question.explanation
     }
-  });
-}));
-
-// ============ ADMIN ROUTES ============
-
-// @route   GET /api/v1/questions/admin/all
-// @desc    Get all questions (Admin)
-// @access  Private/Admin
-router.get('/admin/all', [protect, adminOnly], asyncHandler(async (req, res) => {
-  const {
-    exam, subject, year, shift, status,
-    batch, tier, page = 1, limit = 50, search
-  } = req.query;
-
-  let q = supabase
-    .from('questions')
-    .select('*, exam:exams(name, short_name), subject:subjects(name)', { count: 'exact' });
-
-  if (exam) {
-    const { data: examDoc } = await supabase.from('exams').select('id').eq('slug', exam).single();
-    if (examDoc) q = q.eq('exam_id', examDoc.id);
-  }
-  if (subject) {
-    const { data: subDoc } = await supabase.from('subjects').select('id').eq('slug', subject).single();
-    if (subDoc) q = q.eq('subject_id', subDoc.id);
-  }
-  if (year) q = q.eq('year', parseInt(year));
-  if (shift) q = q.eq('shift', shift);
-  if (tier) q = q.eq('tier', tier);
-  if (status && status !== 'all') q = q.eq('status', status);
-  if (batch) q = q.eq('upload_batch_id', batch);
-  if (search) {
-    const escaped = search.replace(/[%_\\]/g, '\\$&');
-    q = q.or(`question_text.ilike.%${escaped}%,question_html.ilike.%${escaped}%`);
-  }
-
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-  const offset = (pageNum - 1) * limitNum;
-
-  const { data, count, error } = await q
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: true })
-    .range(offset, offset + limitNum - 1);
-
-  if (error) throw error;
-
-  let resolvedData = (data || []).map(resolveQuestionImages);
-  resolvedData = await resolveTopics(resolvedData);
-
-  res.json({
-    success: true,
-    count: resolvedData.length,
-    data: resolvedData,
-    pagination: {
-      page: pageNum,
-      limit: limitNum,
-      total: count || 0,
-      pages: Math.ceil((count || 0) / limitNum)
-    }
-  });
-}));
-
-// @route   POST /api/v1/questions
-// @desc    Create question (Admin)
-// @access  Private/Admin
-router.post('/', [
-  protect, adminOnly,
-  body('question_text').trim().notEmpty().withMessage('Question text is required'),
-  body('options').isArray({ min: 2 }).withMessage('At least 2 options required'),
-  body('correct_answer').isIn(['A', 'B', 'C', 'D', 'E']).withMessage('Valid correct answer required'),
-  body('exam_id').notEmpty().withMessage('Valid exam ID required'),
-  body('subject_id').notEmpty().withMessage('Valid subject ID required'),
-  body('year').isInt({ min: 2000, max: 2100 }).withMessage('Valid year required'),
-  validate
-], asyncHandler(async (req, res) => {
-  const { data: question, error } = await supabaseAdmin
-    .from('questions')
-    .insert({
-      question_text: req.body.question_text,
-      question_html: req.body.question_html || '',
-      options: req.body.options,
-      correct_answer: req.body.correct_answer,
-      explanation: req.body.explanation || { text: '', html: '', image: '' },
-      exam_id: req.body.exam_id,
-      subject_id: req.body.subject_id,
-      year: parseInt(req.body.year),
-      tier: req.body.tier || '',
-      shift: req.body.shift || 'Shift 1',
-      difficulty: req.body.difficulty || 'medium',
-      status: req.body.status || 'draft',
-      created_by: req.user.id
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  await cacheDelPattern(CACHE_PREFIXES.QUESTIONS);
-
-  res.status(201).json({
-    success: true,
-    message: 'Question created successfully',
-    data: question
-  });
-}));
-
-// @route   PUT /api/v1/questions/:id
-// @desc    Update question (Admin)
-// @access  Private/Admin
-router.put('/:id', [protect, adminOnly, validate], asyncHandler(async (req, res) => {
-  const updateData = { ...req.body, updated_by: req.user.id };
-
-  const { data: question, error } = await supabaseAdmin
-    .from('questions')
-    .update(updateData)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error || !question) {
-    throw new AppError('Question not found', 404);
-  }
-
-  await cacheDelPattern(CACHE_PREFIXES.QUESTIONS);
-  await cacheDelPattern(buildKey(CACHE_PREFIXES.QUESTION, req.params.id));
-
-  res.json({
-    success: true,
-    message: 'Question updated successfully',
-    data: question
-  });
-}));
-
-// @route   DELETE /api/v1/questions/:id
-// @desc    Delete question (Admin)
-// @access  Private/Admin
-router.delete('/:id', [protect, adminOnly, validate], asyncHandler(async (req, res) => {
-  const { data: question, error: fetchError } = await supabase
-    .from('questions')
-    .select('id')
-    .eq('id', req.params.id)
-    .single();
-
-  if (fetchError || !question) {
-    throw new AppError('Question not found', 404);
-  }
-
-  const { error } = await supabaseAdmin
-    .from('questions')
-    .delete()
-    .eq('id', req.params.id);
-
-  if (error) throw error;
-
-  await cacheDelPattern(CACHE_PREFIXES.QUESTIONS);
-  await cacheDelPattern(buildKey(CACHE_PREFIXES.QUESTION, req.params.id));
-
-  res.json({
-    success: true,
-    message: 'Question deleted successfully'
-  });
-}));
-
-// @route   PATCH /api/v1/questions/:id/status
-// @desc    Update question status (Admin)
-// @access  Private/Admin
-router.patch('/:id/status', [
-  protect, adminOnly,
-  body('status').isIn(['draft', 'published', 'archived']).withMessage('Invalid status'),
-  validate
-], asyncHandler(async (req, res) => {
-  const { status } = req.body;
-  const updateData = { status, updated_by: req.user.id };
-
-  if (status === 'published') {
-    updateData.published_at = new Date().toISOString();
-    updateData.published_by = req.user.id;
-  }
-
-  const { data: question, error } = await supabaseAdmin
-    .from('questions')
-    .update(updateData)
-    .eq('id', req.params.id)
-    .select()
-    .single();
-
-  if (error || !question) {
-    throw new AppError('Question not found', 404);
-  }
-
-  await cacheDelPattern(CACHE_PREFIXES.QUESTIONS);
-  await cacheDelPattern(buildKey(CACHE_PREFIXES.QUESTION, req.params.id));
-
-  res.json({
-    success: true,
-    message: `Question ${status}`,
-    data: question
-  });
-}));
-
-// @route   POST /api/v1/questions/bulk-status
-// @desc    Bulk update question status (Admin)
-// @access  Private/Admin
-router.post('/bulk-status', [
-  protect, adminOnly,
-  body('questionIds').isArray({ min: 1 }).withMessage('Question IDs required'),
-  body('status').isIn(['draft', 'published', 'archived']).withMessage('Invalid status'),
-  validate
-], asyncHandler(async (req, res) => {
-  const { questionIds, status } = req.body;
-  const updateData = { status, updated_by: req.user.id };
-
-  if (status === 'published') {
-    updateData.published_at = new Date().toISOString();
-    updateData.published_by = req.user.id;
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from('questions')
-    .update(updateData)
-    .in('id', questionIds)
-    .select();
-
-  if (error) throw error;
-
-  await cacheDelPattern(CACHE_PREFIXES.QUESTIONS);
-  for (const qid of questionIds) {
-    await cacheDelPattern(buildKey(CACHE_PREFIXES.QUESTION, qid));
-  }
-
-  res.json({
-    success: true,
-    message: `${(data || []).length} questions updated to ${status}`,
-    modifiedCount: (data || []).length
   });
 }));
 

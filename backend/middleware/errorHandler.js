@@ -1,6 +1,8 @@
 const { logger } = require('../services/logger');
 
-const errorHandler = (err, req, res, next) => {
+const KNOWN_PG_CODES = ['23505', '23503', '22P02', '42703', '42P01', '23502'];
+
+const errorHandler = (err, req, res) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Server Error';
 
@@ -37,21 +39,16 @@ const errorHandler = (err, req, res, next) => {
     message = 'Token expired';
   }
 
-  // Multer file upload errors
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    statusCode = 400;
-    message = 'File size exceeds limit';
-  }
-
-  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-    statusCode = 400;
-    message = 'Unexpected file field';
-  }
-
   // Supabase errors
   if (err.code?.startsWith('PGRST')) {
     statusCode = 400;
     message = 'Database query error';
+  }
+
+  // Prevent raw PG errors from leaking in production
+  if (err.code && KNOWN_PG_CODES.includes(err.code) && process.env.NODE_ENV === 'production') {
+    message = 'Internal server error';
+    statusCode = 500;
   }
 
   res.status(statusCode).json({

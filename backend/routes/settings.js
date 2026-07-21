@@ -14,7 +14,7 @@ router.get('/', asyncHandler(async (req, res) => {
     return res.json({ success: true, data: cached });
   }
 
-  const { data, error } = await supabase.from('settings').select('key, value');
+  const { data, error } = await supabase.from('settings').select('key, value').ilike('key', 'public_%');
   if (error) throw error;
 
   const settings = {};

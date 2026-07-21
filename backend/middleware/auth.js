@@ -2,8 +2,14 @@ const jwt = require('jsonwebtoken');
 const { supabaseAdmin } = require('../config/supabase');
 const { logger } = require('../services/logger');
 
-// Throttle Map for last_activity updates to avoid global namespace pollution
+// Throttle Map for last_activity updates (TTL cleanup every 5 min)
 const lastActivityThrottle = new Map();
+setInterval(() => {
+  const cutoff = Date.now() - 120000;
+  for (const [key, time] of lastActivityThrottle) {
+    if (time < cutoff) lastActivityThrottle.delete(key);
+  }
+}, 300000).unref();
 
 // Verify Supabase JWT token
 async function verifySupabaseToken(token) {
@@ -73,13 +79,12 @@ exports.protect = async (req, res, next) => {
 
     // Auto-create user if not exists (first time login)
     if (userError || !user) {
-      const isAdmin = result.user.email === process.env.ADMIN_EMAIL;
       const { data: newUser, error: createError } = await supabaseAdmin
         .from('users')
         .insert({
           email: result.user.email,
           name: result.user.user_metadata?.full_name || result.user.user_metadata?.name || result.user.email.split('@')[0],
-          role: isAdmin ? 'superadmin' : 'user'
+          role: 'user'
         })
         .select()
         .single();
@@ -131,7 +136,6 @@ exports.protect = async (req, res, next) => {
         .from('users')
         .update({ last_activity: new Date().toISOString() })
         .eq('id', user.id)
-        .then(() => {})
         .catch(err => logger.error('Failed to update user last activity: ' + err.message));
     }
 
@@ -163,7 +167,7 @@ exports.optionalAuth = async (req, res, next) => {
           .select('id, name, email, role, is_active')
           .eq('email', result.user.email)
           .single();
-        if (user) {
+        if (user && user.is_active !== false) {
           req.user = user;
         }
       }
@@ -195,38 +199,3 @@ exports.authorize = (...roles) => {
   };
 };
 
-// Admin only middleware
-exports.adminOnly = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized to access this route'
-    });
-  }
-
-  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Admin access required'
-    });
-  }
-  next();
-};
-
-// Super admin only middleware
-exports.superAdminOnly = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Not authorized to access this route'
-    });
-  }
-
-  if (req.user.role !== 'superadmin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Super admin access required'
-    });
-  }
-  next();
-};

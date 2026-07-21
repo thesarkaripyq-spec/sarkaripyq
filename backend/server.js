@@ -16,11 +16,11 @@ const performanceRoutes = require('./routes/performance');
 const settingsRoutes = require('./routes/settings');
 const booksRoutes = require('./routes/books');
 const searchRoutes = require('./routes/search');
-const uploadRoutes = require('./routes/upload');
-const queueRoutes = require('./routes/queue');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { rateLimiter } = require('./middleware/rateLimiter');
+const { pool } = require('./config/database');
+const promClient = require('prom-client');
 const {
   sanitizeInput,
   securityHeaders,
@@ -33,10 +33,28 @@ app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.set('etag', 'strong');
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  contentSecurityPolicy: false,
-  hsts: process.env.NODE_ENV === 'production'
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: isProduction
+        ? ["'self'", "'unsafe-inline'", "https://accounts.google.com"]
+        : ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://accounts.google.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "https:", "data:", "blob:"],
+      connectSrc: ["'self'", "https://*.supabase.co", "https://accounts.google.com"],
+      frameSrc: ["'self'", "https://accounts.google.com"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  hsts: isProduction
     ? { maxAge: 63072000, includeSubDomains: true, preload: true }
     : false,
   frameguard: { action: 'deny' },
@@ -48,17 +66,18 @@ app.use(helmet({
 app.use(securityHeaders);
 app.use(requestLogger);
 
-// Request timeout: 25s for normal requests, 55s for uploads
+// Request timeout: 25s
 app.use((req, res, next) => {
-  const timeoutMs = req.path.startsWith('/api/v1/upload') ? 55000 : 25000;
-  res.setTimeout(timeoutMs, () => {
-    logger.error(`Request timeout: ${req.method} ${req.path}`);
-    res.status(503).json({ success: false, message: 'Request timed out' });
+  res.setTimeout(25000, () => {
+    if (!res.headersSent) {
+      logger.error(`Request timeout: ${req.method} ${req.path}`);
+      res.status(503).json({ success: false, message: 'Request timed out' });
+    }
   });
   next();
 });
 
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = !isProduction;
 
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -90,7 +109,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-session-id', 'x-csrf-token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-session-id'],
   maxAge: 86400
 }));
 
@@ -110,26 +129,16 @@ if (process.env.NODE_ENV === 'development') {
 
 const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '2mb';
 app.use(express.json({ limit: MAX_BODY_SIZE }));
-app.use(express.urlencoded({ extended: true, limit: MAX_BODY_SIZE }));
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  maxAge: '30d',
-  etag: true,
-  lastModified: true,
-  immutable: true,
-  setHeaders: (res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-  }
-}));
+app.use(express.urlencoded({ extended: false, limit: MAX_BODY_SIZE }));
 
 app.use(rateLimiter);
 app.use(sanitizeInput);
 
 // API-wide cache control (GET endpoints only)
 app.use('/api', (req, res, next) => {
+  res.setHeader('Link', '<https://*.supabase.co>; rel=preconnect');
   if (req.method === 'GET') {
-    const privatePatterns = ['/auth', '/stats/user', '/performance', '/upload', '/queue', '/me'];
+    const privatePatterns = ['/auth', '/stats/user', '/performance', '/queue', '/me'];
     const isPrivate = privatePatterns.some(p => req.path.includes(p));
     if (isPrivate) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -153,39 +162,26 @@ app.use(`${API_PREFIX}/stats`, statsRoutes);
 app.use(`${API_PREFIX}/performance`, performanceRoutes);
 app.use(`${API_PREFIX}/books`, booksRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
-app.use(`${API_PREFIX}/upload`, uploadRoutes);
-app.use(`${API_PREFIX}/queue`, queueRoutes);
 
 app.get(API_PREFIX, (req, res) => {
   res.json({
     success: true,
-    message: 'SARKARIPYQ API v1',
-    version: '1.0.0',
-    database: 'Supabase PostgreSQL'
+    message: 'SARKARIPYQ API v1'
   });
 });
 
 app.get('/api/health', async (req, res) => {
   try {
-    const { pool } = require('./config/database');
-    const start = Date.now();
     await pool.query('SELECT 1');
-    const dbLatency = Date.now() - start;
 
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: {
-        status: 'connected',
-        provider: 'Supabase PostgreSQL',
-        latency: `${dbLatency}ms`
-      }
+      uptime: process.uptime()
     });
   } catch (error) {
     res.status(503).json({
-      status: 'ERROR',
-      error: error.message
+      status: 'ERROR'
     });
   }
 });
@@ -210,7 +206,6 @@ Allow: /about
 Allow: /contact
 Allow: /leaderboard
 
-Disallow: /admin/
 Disallow: /api/
 Disallow: /auth/
 Disallow: /user/
@@ -306,25 +301,25 @@ app.get('/sitemap.xml', async (req, res) => {
 
     exams.forEach(exam => {
       const lastmod = exam.updated_at ? exam.updated_at.split('T')[0] : today;
-      pushUrl(`${baseUrl}/ssc/${exam.slug}_previous_year_questions`, lastmod, 'daily', '0.9');
+      pushUrl(`${baseUrl}/ssc/${exam.slug}-previous-year-questions`, lastmod, 'daily', '0.9');
     });
 
     subjects.forEach(sub => {
       if (sub.exam?.slug) {
-        pushUrl(`${baseUrl}/ssc/${sub.exam.slug}/${sub.slug}_previous_year_questions`, today, 'daily', '0.8');
+        pushUrl(`${baseUrl}/ssc/${sub.exam.slug}/${sub.slug}-previous-year-questions`, today, 'daily', '0.8');
       }
     });
 
     years.forEach(y => {
       if (y.exam_slug && y.year) {
-        pushUrl(`${baseUrl}/ssc/${y.exam_slug}/${y.year}_previous_year_questions`, today, 'weekly', '0.7');
+        pushUrl(`${baseUrl}/ssc/${y.exam_slug}/${y.year}-previous-year-questions`, today, 'weekly', '0.7');
       }
     });
 
     topics.forEach(t => {
       if (t.exam_slug && t.subject_slug && t.topic) {
         const topicSlug = String(t.topic).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-        pushUrl(`${baseUrl}/ssc/${t.exam_slug}/${t.subject_slug}/${topicSlug}_previous_year_questions`, today, 'weekly', '0.6');
+        pushUrl(`${baseUrl}/ssc/${t.exam_slug}/${t.subject_slug}/${topicSlug}-previous-year-questions`, today, 'weekly', '0.6');
       }
     });
 
@@ -338,7 +333,9 @@ ${urlEntries.join('\n')}
     res.send(sitemap);
   } catch (error) {
     logger.error('Error generating sitemap:', error);
-    res.status(500).end();
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error generating sitemap' });
+    }
   }
 });
 
@@ -355,37 +352,45 @@ app.get('/sitemap-index.xml', (req, res) => {
   res.send(xml);
 });
 
-// Prometheus metrics
+// Prometheus metrics (protected, internal only)
 app.get('/api/metrics', async (req, res) => {
+  if (isProduction && !req.isApiKeyAuth) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
   try {
-    const promClient = require('prom-client');
     const metrics = await promClient.register.metrics();
     res.set('Content-Type', promClient.register.contentType);
     res.end(metrics);
   } catch (error) {
     logger.error('Metrics error:', error);
-    res.status(500).end();
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error generating metrics' });
+    }
   }
 });
 
 // SEO-friendly deep link redirects for high-intent keywords.
 // E.g. /ssc-cgl-pyq/2024/shift-1 — sends user to the canonical SPA route.
-app.get(/^\/ssc-([a-z-]+)-pyq(?:\/(\d{4}))?(?:\/shift-(\d+))?$/, (req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') {
+app.get(/^\/ssc-([a-z-]+)-pyq(?:\/(\d{4}))?(?:\/shift-(\d+))?$/, (req, res) => {
+  if (!isProduction) {
     return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
   }
   const examSlug = req.params[0];
   const year = req.params[1];
   const shift = req.params[2];
-  const parts = [`/ssc/${examSlug}_previous_year_questions`];
-  if (year) parts.push(`/${year}_previous_year_questions`);
+  const parts = [`/ssc/${examSlug}-previous-year-questions`];
+  if (year) parts.push(`/${year}-previous-year-questions`);
   if (shift) parts.push(`?shift=Shift+${shift}`);
   return res.redirect(301, parts.join(''));
 });
 
 // In production, serve frontend build as SPA fallback
-if (process.env.NODE_ENV === 'production') {
+if (isProduction) {
   const frontendBuild = path.join(__dirname, '../frontend/build');
+  app.use((req, res, next) => {
+    res.setHeader('Link', '<https://*.supabase.co>; rel=preconnect, <https://fonts.googleapis.com>; rel=preconnect');
+    next();
+  });
   app.use(express.static(frontendBuild, { maxAge: '1y', immutable: true }));
   app.get('*', (req, res, next) => {
     if (!req.path.startsWith('/api/')) {
@@ -404,54 +409,22 @@ if (process.env.NODE_ENV === 'production') {
 app.use(errorHandler);
 
 app.use((req, res) => {
+  logger.warn(`404: ${req.method} ${req.path}`);
   res.status(404).json({ success: false, message: 'Route not found' });
 });
 
 const DEFAULT_PORT = parseInt(process.env.PORT, 10) || 5000;
 
-async function startServer() {
+const isServerless = process.env.VERCEL === '1' || process.env.SERVERLESS === 'true';
+
+if (!isServerless) {
   const server = app.listen(DEFAULT_PORT, () => {
     logger.info(`SARKARIPYQ API Server started`);
     logger.info(`Port: ${DEFAULT_PORT}`);
     logger.info(`Database: Supabase PostgreSQL`);
     logger.info(`API: http://localhost:${DEFAULT_PORT}${API_PREFIX}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-
-    // Attach WebSocket server for live upload logs
-    const { initWebSocket, initPipelineStats } = require('./services/websocket');
-    initWebSocket(server);
-    initPipelineStats();
   });
-
-  // Event-loop lag monitoring (production only)
-  if (process.env.NODE_ENV === 'production') {
-    const CHECK_INTERVAL = 5000;
-    const checkLag = () => {
-      const start = process.hrtime.bigint();
-      setTimeout(() => {
-        const elapsed = Number(process.hrtime.bigint() - start) / 1e6;
-        const lag = elapsed - CHECK_INTERVAL;
-        if (lag > 100) {
-          logger.warn(`Event loop lag detected: ${lag.toFixed(0)}ms`);
-          if (lag > 1000) {
-            logger.error(`Critical event loop blockage: ${lag.toFixed(0)}ms — possible memory pressure`);
-          }
-        }
-        checkLag();
-      }, CHECK_INTERVAL).unref();
-    };
-    checkLag();
-
-    // Memory usage warning
-    setInterval(() => {
-      const mem = process.memoryUsage();
-      const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
-      const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
-      if (heapTotalMB > 200 && heapUsedMB > heapTotalMB * 0.85) {
-        logger.warn(`High heap usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
-      }
-    }, 60000).unref();
-  }
 
   process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully...');
@@ -462,24 +435,14 @@ async function startServer() {
     logger.info('SIGINT received, shutting down gracefully...');
     server.close(() => process.exit(0));
   });
-
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  });
-
-  process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception:', error.message, { stack: error.stack });
-    server.close(() => process.exit(1));
-  });
-
-  return server;
 }
 
-let serverPromise;
-if (process.env.NODE_ENV !== 'test') {
-  serverPromise = startServer();
-} else {
-  serverPromise = Promise.resolve(null);
-}
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
-module.exports = { app, serverPromise };
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error.message, { stack: error.stack });
+});
+
+module.exports = app;

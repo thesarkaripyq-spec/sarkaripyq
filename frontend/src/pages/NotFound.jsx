@@ -23,7 +23,7 @@ const NotFound = memo(() => {
             <Link to="/" className="btn btn-primary">
               <FiHome /> Go Home
             </Link>
-            <Link to="/ssc/ssc-cgl_previous_year_questions" className="btn btn-outline">
+            <Link to="/ssc/ssc-cgl-previous-year-questions" className="btn btn-outline">
               <FiSearch /> Browse Exams
             </Link>
           </div>

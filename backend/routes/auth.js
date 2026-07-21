@@ -3,24 +3,33 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { body } = require('express-validator');
-const { supabase, supabaseAdmin } = require('../config/supabase');
+const { supabaseAdmin } = require('../config/supabase');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { validate } = require('../middleware/validate');
-const { authRateLimiter, rateLimiter } = require('../middleware/rateLimiter');
+const { authRateLimiter } = require('../middleware/rateLimiter');
 const crypto = require('crypto');
 
 const failedLoginAttempts = new Map();
-const CAPTCHA_THRESHOLD = 3;
-const ATTEMPT_TTL = 60 * 60 * 1000; // 1 hour TTL per IP
+const LOCKOUT_THRESHOLD = 10;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 min lockout
+const ATTEMPT_TTL = 60 * 60 * 1000;
 
-const isCaptchaRequired = (ip) => {
+const STALE_CLEAN_INTERVAL = 5 * 60 * 1000;
+setInterval(() => {
+  const cutoff = Date.now() - ATTEMPT_TTL;
+  for (const [ip, entry] of failedLoginAttempts) {
+    if (entry.timestamp < cutoff) failedLoginAttempts.delete(ip);
+  }
+}, STALE_CLEAN_INTERVAL).unref();
+
+const isLockedOut = (ip) => {
   const entry = failedLoginAttempts.get(ip);
-  if (!entry) return false;
-  if (Date.now() - entry.timestamp > ATTEMPT_TTL) {
+  if (!entry || !entry.lockedUntil) return false;
+  if (Date.now() > entry.lockedUntil) {
     failedLoginAttempts.delete(ip);
     return false;
   }
-  return entry.count >= CAPTCHA_THRESHOLD;
+  return true;
 };
 
 const recordFailedAttempt = (ip) => {
@@ -29,20 +38,15 @@ const recordFailedAttempt = (ip) => {
     failedLoginAttempts.set(ip, { count: 1, timestamp: Date.now() });
   } else {
     entry.count++;
+    if (entry.count >= LOCKOUT_THRESHOLD) {
+      entry.lockedUntil = Date.now() + LOCKOUT_DURATION;
+    }
   }
 };
 
 const clearFailedAttempts = (ip) => {
   failedLoginAttempts.delete(ip);
 };
-
-// Prevent unbounded memory growth: purge stale entries every 10 minutes
-setInterval(() => {
-  const cutoff = Date.now() - ATTEMPT_TTL;
-  for (const [ip, entry] of failedLoginAttempts) {
-    if (entry.timestamp < cutoff) failedLoginAttempts.delete(ip);
-  }
-}, 600000);
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -104,7 +108,7 @@ router.post('/register', [
   authRateLimiter,
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Please enter a valid email'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('captchaAnswer').trim().notEmpty().withMessage('CAPTCHA answer is required'),
   body('captchaToken').trim().notEmpty().withMessage('CAPTCHA token is required'),
   validate
@@ -194,6 +198,13 @@ router.post('/login', [
 ], asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
+  if (isLockedOut(req.ip)) {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many failed attempts. Try again in 15 minutes.'
+    });
+  }
+
   const { data: user, error } = await supabaseAdmin
     .from('users')
     .select('id, name, email, role, avatar, is_active, password, created_at')
@@ -204,7 +215,7 @@ router.post('/login', [
     recordFailedAttempt(req.ip);
     return res.status(401).json({
       success: false,
-      message: 'Invalid credentials'
+      message: 'Invalid email or password'
     });
   }
 
@@ -212,7 +223,15 @@ router.post('/login', [
     recordFailedAttempt(req.ip);
     return res.status(401).json({
       success: false,
-      message: 'Account is deactivated'
+      message: 'Invalid email or password'
+    });
+  }
+
+  if (!user.password) {
+    recordFailedAttempt(req.ip);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid email or password'
     });
   }
 
@@ -221,7 +240,7 @@ router.post('/login', [
     recordFailedAttempt(req.ip);
     return res.status(401).json({
       success: false,
-      message: 'Invalid credentials'
+      message: 'Invalid email or password'
     });
   }
 
@@ -260,17 +279,16 @@ router.get('/me', asyncHandler(async (req, res) => {
   }
 
   const token = authHeader.split(' ')[1];
-  let decoded;
-  try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
-  } catch (err) {
+
+  const { data: { user: authUser }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !authUser) {
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
   const { data: user } = await supabaseAdmin
     .from('users')
     .select('id, name, email, role, avatar, created_at')
-    .eq('id', decoded.id)
+    .eq('email', authUser.email)
     .single();
 
   if (!user) {
@@ -280,73 +298,6 @@ router.get('/me', asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: user
-  });
-}));
-
-// @route   POST /api/auth/admin/login
-// @desc    Admin login
-// @access  Public
-router.post('/admin/login', [
-  authRateLimiter,
-  body('email').isEmail().withMessage('Please enter a valid email'),
-  body('password').notEmpty().withMessage('Password is required'),
-  validate
-], asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-
-  const { data: user } = await supabaseAdmin
-    .from('users')
-    .select('id, name, email, role, is_active, password')
-    .eq('email', email)
-    .single();
-
-  if (!user) {
-    recordFailedAttempt(req.ip);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid credentials'
-    });
-  }
-
-  if (user.role !== 'admin' && user.role !== 'superadmin') {
-    recordFailedAttempt(req.ip);
-    return res.status(403).json({
-      success: false,
-      message: 'Admin access only'
-    });
-  }
-
-  if (!user.is_active) {
-    recordFailedAttempt(req.ip);
-    return res.status(401).json({
-      success: false,
-      message: 'Account is deactivated'
-    });
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    recordFailedAttempt(req.ip);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid credentials'
-    });
-  }
-
-  const token = generateToken(user.id);
-
-  res.json({
-    success: true,
-    message: 'Admin login successful',
-    data: {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-      token
-    }
   });
 }));
 

@@ -31,7 +31,7 @@ const QuestionCard = memo(({
 
   const handleShare = useCallback(() => {
     const examSlug = question.exam?.slug || 'ssc-cgl';
-    const shareUrl = `${window.location.origin}/ssc/${examSlug}_previous_year_questions?q=${question.id}`;
+    const shareUrl = `${window.location.origin}/ssc/${examSlug}-previous-year-questions?q=${question.id}`;
     const text = `Practice this real solved ${question.exam?.name || 'SSC'} PYQ on SarkariPYQ:\n\n`;
 
     if (navigator.share) {
@@ -82,16 +82,6 @@ const QuestionCard = memo(({
   const safeQuestionText = getQuestionContent.text;
   const safeQuestionHtml = getQuestionContent.html;
 
-  const extractedImageUrls = useMemo(() => {
-    const html = safeQuestionHtml || '';
-    const urls = [];
-    const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi;
-    let m;
-    while ((m = imgRegex.exec(html)) !== null) urls.push(m[1]);
-    if (question.image_url && !urls.includes(question.image_url)) urls.push(question.image_url);
-    return urls;
-  }, [safeQuestionHtml, question.image_url]);
-
   const handleOptionClick = useCallback((option) => {
     if (answered || disabled) return;
     
@@ -100,9 +90,7 @@ const QuestionCard = memo(({
     setLocalShowExplanation(true);
     
     if (onAnswer) {
-      const correctAns = question.correct_answer || question.correctAnswer;
-      const isCorrect = option.label === correctAns;
-      onAnswer(question.id, option.label, isCorrect);
+      onAnswer(question.id, option.label);
     }
 
     setTimeout(() => {
@@ -126,7 +114,7 @@ const QuestionCard = memo(({
     }
   }, [onToggleExplanation, question.id]);
 
-  const correctAns = question.correct_answer || question.correctAnswer;
+  const correctAns = question.correct_answer;
   const isCorrect = localSelected === correctAns;
 
   const renderedOptions = useMemo(() => {
@@ -258,13 +246,19 @@ const QuestionCard = memo(({
       {/* Answer Feedback */}
       {answered && (
         <div className="px-2.5 pb-2">
-          <div className={`p-1.5 rounded border ${
-            isCorrect ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
-          }`}>
-            <p className={`text-xs font-medium ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-              {isCorrect ? '✓ Correct' : `✗ Wrong (${correctAns})`}
-            </p>
-          </div>
+          {correctAns != null ? (
+            <div className={`p-1.5 rounded border ${
+              isCorrect ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
+            }`}>
+              <p className={`text-xs font-medium ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                {isCorrect ? '✓ Correct' : `✗ Wrong (${correctAns})`}
+              </p>
+            </div>
+          ) : (
+            <div className="p-1.5 rounded border border-gray-300 bg-gray-50">
+              <p className="text-xs font-medium text-gray-600">Answer submitted</p>
+            </div>
+          )}
         </div>
       )}
 

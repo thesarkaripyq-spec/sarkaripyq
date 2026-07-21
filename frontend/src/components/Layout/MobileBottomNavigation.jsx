@@ -13,7 +13,7 @@ const MobileBottomNavigation = memo(() => {
     },
     {
       name: 'Practice',
-      path: '/ssc/ssc-cgl_previous_year_questions',
+      path: '/ssc/ssc-cgl-previous-year-questions',
       icon: FiAward,
       // Active for any practice subroutes as well
       match: (path) => path.startsWith('/ssc/') || path === '/practice' || path.startsWith('/ssc-'),

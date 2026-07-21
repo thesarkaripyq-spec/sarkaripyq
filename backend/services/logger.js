@@ -21,15 +21,21 @@ const format = winston.format.combine(
       })
 );
 
+const transports = [
+  new winston.transports.Console({ handleExceptions: true }),
+];
+if (process.env.LOG_FILE === 'true') {
+  transports.push(
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error', maxsize: 10 * 1024 * 1024, maxFiles: 5 }),
+    new winston.transports.File({ filename: 'logs/combined.log', maxsize: 10 * 1024 * 1024, maxFiles: 5 }),
+  );
+}
+
 const logger = winston.createLogger({
   level,
   levels,
   format,
-  transports: [
-    new winston.transports.Console({ handleExceptions: true }),
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error', maxsize: 10 * 1024 * 1024, maxFiles: 5 }),
-    new winston.transports.File({ filename: 'logs/combined.log', maxsize: 10 * 1024 * 1024, maxFiles: 5 }),
-  ],
+  transports,
   exitOnError: false,
 });
 

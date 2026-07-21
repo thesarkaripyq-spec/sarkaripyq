@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import SEOHead from '../components/Common/SEOHead';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
+import ErrorBoundary from '../components/Common/ErrorBoundary';
 import useAuthStore from '../store/authStore';
 import { statsAPI } from '../services/api';
 import { 
@@ -260,7 +261,7 @@ const Profile = () => {
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No Practice Data Yet</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Start practicing questions to see your analytics, ranking, and performance tracking here.</p>
                 <a
-                  href="/ssc/ssc-cgl_previous_year_questions"
+                  href="/ssc/ssc-cgl-previous-year-questions"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
                 >
                   <FiTarget className="w-4 h-4" />
@@ -400,6 +401,7 @@ const Profile = () => {
               </div>
 
               {/* ===== CHARTS ROW ===== */}
+              <ErrorBoundary>
               <div className="mb-5">
 
                 {/* Accuracy Overview */}
@@ -494,7 +496,9 @@ const Profile = () => {
                   </div>
                 </div>
               )}
+              </ErrorBoundary>
 
+              <ErrorBoundary>
               {/* ===== LEADERBOARD SECTION ===== */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 mb-5">
                 <div className="flex items-center justify-between mb-5">
@@ -617,6 +621,8 @@ const Profile = () => {
                 )}
               </div>
 
+              </ErrorBoundary>
+              <ErrorBoundary>
               {/* ===== SUBJECT + EXAM PERFORMANCE ===== */}
               <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 mb-5">
 
@@ -633,7 +639,7 @@ const Profile = () => {
                         const st = accuracyStatus(accuracy);
                         const Icon = st.icon;
                         return (
-                          <div key={index} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
+                          <div key={subject.name || subject.id || index} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
                             <div className="flex items-center justify-between mb-2.5">
                               <span className="font-semibold text-sm text-slate-900 dark:text-white">{subject.name}</span>
                               <span className={`text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${st.bg} ${st.color}`}>
@@ -678,7 +684,7 @@ const Profile = () => {
                         const st = accuracyStatus(parseFloat(accuracy));
                         const Icon = st.icon;
                         return (
-                          <div key={index} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
+                          <div key={exam.name || exam.id || index} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
                             <div className="flex items-center justify-between mb-2.5">
                               <span className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-2">
                                 {exam.name}
@@ -712,6 +718,8 @@ const Profile = () => {
 
               </div>
 
+              </ErrorBoundary>
+              <ErrorBoundary>
               {/* ===== RECENT ACTIVITY ===== */}
               {stats?.recentAttempts && stats.recentAttempts.length > 0 && (
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 mb-5">
@@ -756,6 +764,7 @@ const Profile = () => {
                   </div>
                 </div>
               )}
+              </ErrorBoundary>
 
             </>
           )}
