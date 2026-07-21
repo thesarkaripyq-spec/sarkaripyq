@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd /app/sarkaripyq
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Pull Docker images
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/sarkaripyq-api:${{ github.sha }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/sarkaripyq-web:${{ github.sha }}
+            
+            # Update docker-compose with new images
+            sed -i 's/sarkaripyq-api:.*/sarkaripyq-api:${{ github.sha }}/' docker-compose.yml
+            sed -i 's/sarkaripyq-web:.*/sarkaripyq-web:${{ github.sha }}/' docker-compose.yml
+            
+            # Pull latest code and rebuild
+            docker compose pull
+            docker compose up -d --build
+            
+            # Run database migrations if any
+            for f in backend/db/migrations/*.sql; do
+              if [ -f "$f" ]; then
+                echo "Running migration: $f"
+                docker compose exec -T api psql "$DATABASE_URL" -f "/app/$f" || true
+              fi
+            done
+            
+            # Clean up old images
+            docker image prune -f
+
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Send Slack Notification
+        if: always()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "Deployment ${{ needs.deploy.result }} for SARKARIPYQ",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*SARKARIPYQ Deployment*\nStatus: ${{ needs.deploy.result == 'success' && '✅ Deployed' || '❌ Failed' }}\nCommit: ${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

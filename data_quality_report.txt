@@ -1,0 +1,178 @@
+================================================================================
+  DATA QUALITY AUDIT REPORT
+  Generated: June 2026
+  Database: Supabase PostgreSQL
+================================================================================
+
+SUMMARY BEFORE vs AFTER
+----------------------
+                          Before          After          Change
+  Total published         99,658          99,615         -43 (dupes deleted)
+  Null exam_date          2,297           2,297          no change
+  Null/empty shift        8,779           8,779          no change
+  Empty tier              40,668          0              all standardized
+  Year mismatches         5 cases         1 remaining    auto-fixed 4/5
+
+
+================================================================================
+SECTION 1: RECORDS AUTOMATICALLY CORRECTED (41,161 total)
+================================================================================
+
+  1a. TIER STANDARDIZATION (40,668 questions)
+  ──────────────────────────────────────────
+  Action: SET tier='N/A' WHERE tier IS NULL OR tier=''
+  Reason: SSC GD, SSC MTS, SSC Selection Post, SSC Stenographer have no tier
+           concept. Standardizing ensures consistency.
+  Exams affected: SSC GD (13,134 Q), SSC MTS (13,989 Q),
+                   SSC Selection Post (9,346 Q), SSC Stenographer (4,199 Q)
+
+  1b. YEAR CORRECTION (450 questions)
+  ───────────────────────────────────
+  Action: SET year = EXTRACT(YEAR FROM exam_date) WHERE year=2025 AND date=2019
+  Reason: Series names like "13th Sep. 19" were parsed, but the year field
+           was incorrectly set to 2025 instead of 2019.
+  Series affected:
+    - CGL Tier II - English 13th Sep. 19 (200 Q)  year 2025 → 2019
+    - CGL Tier II - Quant 13th Sep. 19 (100 Q)    year 2025 → 2019
+    - SSC GD Constable (English) - 11 Feb 2019 (75 Q)  year 2025 → 2019
+    - SSC GD Constable (English) - 3 March 2019 (75 Q) year 2025 → 2019
+
+  1c. DUPLICATE QUESTION REMOVAL (43 questions)
+  ─────────────────────────────────────────────
+  Action: Deleted exact duplicate question_text rows, keeping 1 copy each
+  Reason: SSC GD 2023-01-11 Shift 3 had 160 Q (expected 80).
+           43 exact duplicate questions were identified and removed.
+           117 unique questions remain (37 more than expected 80 — see Section 4).
+  Series: SSC GD Constable (English) - 12 Jan 2023 - Shift 3
+
+
+================================================================================
+SECTION 2: RECORDS REQUIRING MANUAL VERIFICATION
+================================================================================
+
+  2a. SUSPICIOUS QUESTION COUNTS
+  ─────────────────────────────
+  These deviate significantly from their exam's typical pattern and are NOT
+  explainable by year-to-year format changes:
+
+  SSC CHSL Tier 1 | 2020-10-16 Shift 1 | 75 Q (typical 100, diff -25)
+    → Likely missing 25 questions during upload; or may be a partial series.
+    Series to check: series_name for (exam_date='2020-10-16', shift='Shift 1')
+
+  SSC CPO Tier 1 | 2019-12-11 Shift 1 | 189 Q (typical 200, diff -11)
+    → 11 questions missing from an otherwise complete exam day.
+    Series to check: (exam_date='2019-12-11', shift='Shift 1')
+
+  SSC Selection Post | 2023-06-27 Shift 3 | 51 Q (typical 100, diff -49)
+    → Only half the expected questions available.
+    Series: SSC Selection Post - Graduation Level - 28 June 2023 - Shift 3 (51 Q)
+    → Check if Matriculation/Higher Secondary level also had Shift 3 on this date.
+
+  SSC GD | 2023-01-11 Shift 3 | 117 Q (after cleanup, typical 80, diff +37)
+    → After removing 43 exact duplicates, 117 unique questions remain.
+       Either this shift had extra questions, or there are near-duplicates
+       (same content, slightly different wording).
+
+  SSC GD Constable 2024 (English) - Prev Year 20/21/22/26/30 (5×80=400 Q)
+    → These are "Previous Year" compilations without specific dates.
+       Consider assigning approximate dates or marking as unsorted.
+
+  2b. YEAR-LABEL MISMATCH (1 case - likely correct but verify)
+  ────────────────────────────────────────────────────────────
+  SSC CPO Tier II 2024 Test 08 March 2025
+    → year=2024 (exam cycle) but exam_date=2025-03-07 (actual test date)
+    → This is consistent with naming convention "CPO Tier II 2024 Test".
+    → VERIFY: Should year field reflect exam cycle (2024) or test date (2025)?
+
+  2c. MEMORY BASED TEST (97 questions)
+  ────────────────────────────────────
+  SSC Selection Post 2025 (Phase 13) - Memory Based Test
+    → 97 questions with no exam_date, no shift
+    → Cannot assign date; review against original source data
+
+
+================================================================================
+SECTION 3: DUPLICATE EXAM+DATE+SHIFT+TIER COMBINATIONS
+================================================================================
+
+  These are groups where multiple source_series contributed questions to the
+  same exam + date + shift combination. In all cases EXCEPT GD 2023-01-11 S3,
+  the multi-series layout is intentional:
+
+  LEGITIMATE (different series for different levels/languages):
+  ──────────────────────────────────────────────────────────────
+  SSC GD | 2025-02-03 | Shift 1/2/3 | 2 series each (English 80 + Hindi 20 = 100)
+  SSC GD | 2025-02-04 | Shift 1/2   | 2 series each (English 80 + Hindi 8-20 = 88-100)
+  SSC Selection Post | 2020-11-08 | Shift 3 | 2 series (Grad 100 + Matric 100 = 200)
+  SSC Selection Post | 2022-08-04 | Shift 3 | 2 series (Grad 100 + Matric 100 = 200)
+
+  GENUINE DUPLICATE (same series, exact duplicate questions):
+  ───────────────────────────────────────────────────────────
+  SSC GD | 2023-01-11 | Shift 3 | 2 series → CLEANED UP (43 dupes removed)
+
+
+================================================================================
+SECTION 4: REMAINING ANOMALIES AFTER CLEANUP
+================================================================================
+
+  4a. EXAM DATE & SHIFT PERCENTAGE COMPLETENESS
+  ─────────────────────────────────────────────
+  Metric                         Count          Coverage
+  Questions with exam_date       97,318         97.7%
+  Questions with shift           90,836         91.2%
+  Questions with tier            99,615         100% (after fix)
+  Questions with year            99,615         100%
+
+  4b. KNOWN UNFIXABLE (no date in source data)
+  ────────────────────────────────────────────
+  23 series (2,297 Q) have no exam_date because "Previous Year" or
+  "Memory Based Test" series contain no date information:
+    - SSC CPO 2020 - Previous Year 4              : 200 Q
+    - SSC GD Constable 2024 - Prev Year 20-22,26,30: 400 Q (5 series)
+    - SSC MTS - Previous Year 6-20                 : 1,500 Q (15 series)
+    - SSC Selection Post - H.S. Level PY 25        : 100 Q
+    - SSC Selection Post 2025 Phase 13 Memory Based: 97 Q
+
+  4c. REMAINING SHIFT-LESS RECORDS (all legitimate single-shift exams)
+  ─────────────────────────────────────────────────────────────────────
+  8,779 questions across 26 date groups:
+    - SSC CGL Tier 2         : 17 dates (dates spread across 2016-2023)
+    - SSC CHSL Tier 2        : 1 date (2024-11-17, 135 Q)
+    - SSC CPO Tier 1/2       : 6 dates (various years, 200 Q each)
+    - SSC Selection Post     : 2 dates (2019, 100-300 Q)
+  
+  These are Tier 2 exams which typically have no shift designation.
+  No action needed.
+
+  4d. GD 2019 PARTIAL DATA (25 Q per shift instead of 80)
+  ────────────────────────────────────────────────────────
+  18 shift-slots across Feb-Mar 2019 have only 25 questions each.
+  These are English-only subsets (series name: "SSC GD Constable (English)")
+  and intentionally contain only the English section. No action needed.
+
+
+================================================================================
+SECTION 5: RECOMMENDATIONS
+================================================================================
+
+  1. Investigate the 4 suspicious counts (Section 2a): CHSL 75, CPO 189,
+     Selection Post 51, GD 2023-01-11 S3 117 — check if original upload
+     batches had incomplete data.
+
+  2. For the 23 series without dates (Section 4b), if original source data
+     is available, backfill exam_date. Otherwise mark as "year-unknown" series.
+
+  3. Memory Based Test (97 Q): Either assign as-is or mark for manual review
+     against the original test-taker recollections.
+
+  4. Consider merging GD 2025 English + Hindi series into single series per
+     shift (currently separate: "GD Const 2025 (English)" and "GD Const 2025 (Hindi)"
+     sharing the same date+shift).
+
+  5. Standardize "SSC Selection Post - Graduation Level 2020" and
+     "SSC Selection Post - Matriculation Level" to use consistent naming
+     (currently "Level 2020" vs "Level" minus year).
+
+================================================================================
+END OF REPORT
+================================================================================

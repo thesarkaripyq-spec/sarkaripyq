@@ -1,0 +1,39 @@
+# robots.txt for SarkariPYQ.com
+# Allow all ethical crawlers to index our content
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+Disallow: /database-status
+Disallow: /practice
+Disallow: /admin
+Crawl-Delay: 2
+
+# Block known AI scrapers that disregard robots.txt and abuse content
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Anthropic-AI
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+# Sitemap
+Sitemap: https://sarkaripyq.com/sitemap.xml

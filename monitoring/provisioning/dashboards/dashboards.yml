@@ -1,0 +1,13 @@
+{
+  "apiVersion": 1,
+  "providers": [
+    {
+      "name": "SARKARIPYQ",
+      "folder": "",
+      "type": "file",
+      "options": {
+        "path": "/var/lib/grafana/dashboards"
+      }
+    }
+  ]
+}

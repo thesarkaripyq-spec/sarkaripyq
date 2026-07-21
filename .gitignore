@@ -1,0 +1,40 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Environment files (production)
+.env
+.env.production
+.env.local
+.env.*.local
+
+# SSL certificates (generated at deploy time)
+ssl/
+
+# Uploads (user-generated content)
+backend/uploads/
+
+# Logs
+backend/logs/
+logs/
+*.log
+
+# Build output
+frontend/build/
+
+# Coverage reports
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+docker-compose.override.yml
