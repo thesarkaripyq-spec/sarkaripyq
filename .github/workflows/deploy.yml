@@ -5,7 +5,7 @@ on:
     workflows: ["CI Pipeline"]
     types:
       - completed
-    branches: [main]
+    branches: [main, master]
 
 jobs:
   deploy:
