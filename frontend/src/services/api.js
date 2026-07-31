@@ -1,7 +1,9 @@
 import { supabase } from '../supabase';
 import useAuthStore from '../store/authStore';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL || '') + '/api/v1';
+let apiRoot = (process.env.REACT_APP_API_URL || '').replace(/\/+$/, '');
+if (apiRoot.endsWith('/api')) apiRoot = apiRoot.slice(0, -4);
+const API_BASE_URL = `${apiRoot}/api/v1`;
 
 const cleanParams = (params) => {
   const cleaned = {};

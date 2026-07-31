@@ -9,7 +9,7 @@ RUN npm ci --legacy-peer-deps
 
 COPY . .
 
-ARG REACT_APP_API_URL=http://localhost:5000/api
+ARG REACT_APP_API_URL=http://localhost:5000
 ARG REACT_APP_GOOGLE_CLIENT_ID=
 
 ENV REACT_APP_API_URL=$REACT_APP_API_URL

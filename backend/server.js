@@ -84,6 +84,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:8081',
+  'https://sarkaripyq.com',
+  'https://www.sarkaripyq.com',
   /^https?:\/\/localhost(:\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
   /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/,
@@ -105,7 +107,7 @@ app.use(cors({
     if (allowedOrigins.some(o => o instanceof RegExp ? o.test(origin) : o === origin)) {
       return callback(null, true);
     }
-    return callback(new Error('CORS: origin not allowed'));
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -151,7 +153,6 @@ app.use('/api', (req, res, next) => {
 
 // API v1 routes
 const API_PREFIX = '/api/v1';
-app.use(API_PREFIX, apiKeyAuth);
 
 app.use(`${API_PREFIX}/auth`, authRoutes);
 app.use(`${API_PREFIX}/exams`, examRoutes);
@@ -353,7 +354,7 @@ app.get('/sitemap-index.xml', (req, res) => {
 });
 
 // Prometheus metrics (protected, internal only)
-app.get('/api/metrics', async (req, res) => {
+app.get('/api/metrics', apiKeyAuth, async (req, res) => {
   if (isProduction && !req.isApiKeyAuth) {
     return res.status(403).json({ success: false, message: 'Forbidden' });
   }

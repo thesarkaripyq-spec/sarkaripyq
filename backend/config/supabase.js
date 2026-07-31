@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 const { pool } = require('./database');
 const { logger } = require('../services/logger');
 
@@ -10,12 +11,16 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   throw new Error('Missing required Supabase environment variables: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY');
 }
 
+const realtimeOptions = { transport: ws };
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: false }
+  auth: { persistSession: false },
+  realtime: realtimeOptions
 });
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
+  auth: { autoRefreshToken: false, persistSession: false },
+  realtime: realtimeOptions
 });
 
 const query = async (text, params) => {

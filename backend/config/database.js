@@ -6,7 +6,9 @@ const isServerless = process.env.VERCEL === '1' || process.env.SERVERLESS === 't
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL + (process.env.DATABASE_URL?.includes('?') ? '' : '?pgbouncer=true'),
   ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: true, ca: process.env.SUPABASE_CA_CERT || undefined }
+    ? (process.env.SUPABASE_CA_CERT
+        ? { rejectUnauthorized: true, ca: process.env.SUPABASE_CA_CERT }
+        : { rejectUnauthorized: false })
     : { rejectUnauthorized: false },
   max: isServerless ? 1 : (process.env.NODE_ENV === 'production' ? 25 : 5),
   idleTimeoutMillis: isServerless ? 10000 : 30000,
