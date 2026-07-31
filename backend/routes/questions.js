@@ -165,14 +165,20 @@ router.get('/', [optionalAuth], asyncHandler(async (req, res) => {
 
   const COLUMNS = `q.id, q.exam_id, q.subject_id, q.question_text, q.question_html, q.options, q.correct_answer, q.explanation, q.difficulty, q.topic, q.tags, q.year, q.shift, q.exam_date, q.image_url, q.comprehensive_en, e.name as exam_name, e.slug as exam_slug, e.short_name as exam_short, s.name as subject_name, s.slug as subject_slug`;
 
+  const baseSelect = `FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause}`;
+
   const { rows } = await pgQuery(
     random === 'true'
-      ? `SELECT ${COLUMNS}, COUNT(*) OVER() as total_count FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause} ORDER BY random() LIMIT $${idx}`
-      : `SELECT ${COLUMNS}, COUNT(*) OVER() as total_count FROM questions q JOIN exams e ON e.id = q.exam_id JOIN subjects s ON s.id = q.subject_id WHERE ${whereClause} ORDER BY q.created_at DESC, q.id ASC OFFSET $${idx} LIMIT $${idx+1}`,
+      ? `SELECT ${COLUMNS} ${baseSelect} ORDER BY random() LIMIT $${idx}`
+      : `SELECT ${COLUMNS} ${baseSelect} ORDER BY q.created_at DESC, q.id ASC OFFSET $${idx} LIMIT $${idx+1}`,
     random === 'true' ? [...params, limitNum] : [...params, offset, limitNum]
   );
 
-  const count = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
+  const { rows: countRows } = await pgQuery(
+    `SELECT count(*)::int AS total_count FROM questions q WHERE ${whereClause}`,
+    params
+  );
+  const count = countRows.length > 0 ? parseInt(countRows[0].total_count) : 0;
 
   // Map rows to expected format
   let finalData = rows.map(r => ({
