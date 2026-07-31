@@ -13,6 +13,7 @@ const usePracticeStore = create((set, get) => ({
   
   // Answers and attempts
   answers: {}, // { questionId: selectedOption }
+  correctAnswers: {}, // { questionId: correctOption }
   showExplanation: {}, // { questionId: boolean }
   
   // Session stats
@@ -32,6 +33,7 @@ const usePracticeStore = create((set, get) => ({
     questions, 
     currentQuestionIndex: 0,
     answers: {},
+    correctAnswers: {},
     showExplanation: {},
     startTime: Date.now(),
     sessionStats: {
@@ -43,8 +45,11 @@ const usePracticeStore = create((set, get) => ({
     }
   }),
   
-  submitAnswer: (questionId, selectedOption, isCorrect) => set((state) => {
+  submitAnswer: (questionId, selectedOption, isCorrect, correctAnswer) => set((state) => {
     const newAnswers = { ...state.answers, [questionId]: selectedOption };
+    const newCorrectAnswers = correctAnswer != null
+      ? { ...state.correctAnswers, [questionId]: correctAnswer }
+      : state.correctAnswers;
     const newShowExplanation = { ...state.showExplanation, [questionId]: true };
     
     const alreadyAnswered = state.answers[questionId] !== undefined;
@@ -61,6 +66,7 @@ const usePracticeStore = create((set, get) => ({
     
     return {
       answers: newAnswers,
+      correctAnswers: newCorrectAnswers,
       showExplanation: newShowExplanation,
       sessionStats: newStats
     };
@@ -77,6 +83,7 @@ const usePracticeStore = create((set, get) => ({
     questions: [],
     currentQuestionIndex: 0,
     answers: {},
+    correctAnswers: {},
     showExplanation: {},
     sessionStats: {
       attempted: 0,

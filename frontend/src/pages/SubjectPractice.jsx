@@ -82,7 +82,8 @@ const SubjectPractice = memo(() => {
     submitAnswer,
     showExplanation,
     toggleExplanation,
-    answers
+    answers,
+    correctAnswers
   } = usePracticeStore();
 
   // Filter states
@@ -326,6 +327,7 @@ const SubjectPractice = memo(() => {
     }
 
     let actualIsCorrect = false;
+    let actualCorrectAnswer = null;
     try {
       const response = await questionsAPI.submitAttempt(questionId, {
         selectedAnswer: selectedOption,
@@ -333,6 +335,9 @@ const SubjectPractice = memo(() => {
       });
       if (response?.data?.correct != null) {
         actualIsCorrect = response.data.correct;
+      }
+      if (response?.data?.correctAnswer != null) {
+        actualCorrectAnswer = response.data.correctAnswer;
       }
     } catch (error) {
       console.error('Error submitting answer:', error);
@@ -342,7 +347,7 @@ const SubjectPractice = memo(() => {
         toast.error('Failed to save your answer. Check your connection and try again.');
       }
     }
-    submitAnswer(questionId, selectedOption, actualIsCorrect);
+    submitAnswer(questionId, selectedOption, actualIsCorrect, actualCorrectAnswer);
   }, [isAuthenticated, submitAnswer]);
 
   if (loading) {
@@ -527,6 +532,7 @@ const SubjectPractice = memo(() => {
                     question={question}
                     index={index + 1}
                     selectedAnswer={answers[question.id]}
+                    correctAnswer={correctAnswers[question.id]}
                     showExplanation={showExplanation[question.id]}
                     onAnswer={handleAnswer}
                     onToggleExplanation={toggleExplanation}

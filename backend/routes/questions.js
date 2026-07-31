@@ -14,25 +14,16 @@ const IMG_SRC_REGEX = /src=["'](img_[a-zA-Z0-9_.-]+)["']/gi;
 const IMG_URL_REGEX = /^(img_[a-zA-Z0-9_.-]+)$/i;
 function resolveImageUrls(html, examSlug) {
   if (!html) return html;
-  // First resolve local img_ references to Supabase CDN
-  let result = html.replace(IMG_SRC_REGEX, (match, imgName) => {
+  // Resolve local img_ references to Supabase CDN; leave external URLs untouched
+  return html.replace(IMG_SRC_REGEX, (match, imgName) => {
     const cdnUrl = `${SUPABASE_URL}/storage/v1/object/public/sarkaripyq-images/questions/${examSlug}/${imgName}`;
     return `src="${cdnUrl}"`;
   });
-  // Strip any remaining external image URLs (not from Supabase)
-  result = result.replace(/<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*\/?>/gi, (match, url) => {
-    if (url.startsWith(SUPABASE_URL)) return match;
-    return '';
-  });
-  return result;
 }
 
 function resolveImageUrl(url, examSlug) {
   if (!url) return '';
-  if (url.startsWith('http')) {
-    if (url.startsWith(SUPABASE_URL)) return url;
-    return '';
-  }
+  if (url.startsWith('http')) return url;
   const match = url.match(IMG_URL_REGEX);
   if (!match) return '';
   return `${SUPABASE_URL}/storage/v1/object/public/sarkaripyq-images/questions/${examSlug}/${match[1]}`;

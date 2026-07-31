@@ -195,6 +195,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     showExplanation,
     toggleExplanation,
     answers,
+    correctAnswers,
     resetSession
   } = usePracticeStore();
 
@@ -530,6 +531,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
     }
 
     let actualIsCorrect = false;
+    let actualCorrectAnswer = null;
     try {
       const response = await questionsAPI.submitAttempt(questionId, {
         selectedAnswer: selectedOption,
@@ -537,6 +539,9 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
       });
       if (response?.data?.correct != null) {
         actualIsCorrect = response.data.correct;
+      }
+      if (response?.data?.correctAnswer != null) {
+        actualCorrectAnswer = response.data.correctAnswer;
       }
     } catch (error) {
       console.error('Error submitting answer:', error);
@@ -547,7 +552,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
         toast.error('Failed to save your answer. Check your connection and try again.');
       }
     }
-    submitAnswer(questionId, selectedOption, actualIsCorrect);
+    submitAnswer(questionId, selectedOption, actualIsCorrect, actualCorrectAnswer);
 
     // Update Streak and Solved Today Counters locally
     const newSolved = solvedToday + 1;
@@ -1233,6 +1238,7 @@ const QuestionPractice = memo(({ examSlug: propExamSlug }) => {
                           question={question}
                           index={absIndex}
                           selectedAnswer={answers[question.id]}
+                          correctAnswer={correctAnswers[question.id]}
                           showExplanation={showExplanation[question.id]}
                           onAnswer={handleAnswer}
                           onToggleExplanation={toggleExplanation}

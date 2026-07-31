@@ -132,7 +132,12 @@ export const authAPI = {
       })
     });
     const resData = await response.json();
-    if (!response.ok) throw new Error(resData.message || 'Registration failed');
+    if (!response.ok) {
+      if (resData.errors && resData.errors.length > 0) {
+        throw new Error(resData.errors[0].message || resData.message || 'Registration failed');
+      }
+      throw new Error(resData.message || 'Registration failed');
+    }
     return resData;
   },
   getCaptcha: async () => {

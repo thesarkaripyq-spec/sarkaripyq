@@ -45,8 +45,8 @@ const Register = () => {
       toast.error('Please enter your email address');
       return;
     }
-    if (!password || password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (!password || password.length < 8) {
+      toast.error('Password must be at least 8 characters');
       return;
     }
     if (!captchaAnswer) {
@@ -155,10 +155,10 @@ const Register = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                     autoComplete="new-password"
                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition pr-12"
-                    placeholder="Password (min 6 characters)"
+                    placeholder="Password (min 8 characters)"
                   />
                   <button
                     type="button"

@@ -19,6 +19,7 @@ const QuestionCard = memo(({
   index,
   onAnswer,
   selectedAnswer,
+  correctAnswer,
   showExplanation,
   onToggleExplanation,
   disabled = false
@@ -114,7 +115,7 @@ const QuestionCard = memo(({
     }
   }, [onToggleExplanation, question.id]);
 
-  const correctAns = question.correct_answer;
+  const correctAns = question.correct_answer ?? correctAnswer;
   const isCorrect = localSelected === correctAns;
 
   const renderedOptions = useMemo(() => {
