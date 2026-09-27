@@ -1,0 +1,24 @@
+node_modules
+.next
+out
+build
+dist
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+
+# Scraped TestRanking payloads: large, regenerable, and upstream-owned.
+# Re-create with: python scripts/testranking/scrape_pyq.py --stage all --category ssc
+data/testranking/
+scripts/testranking/.cache/
+
+__pycache__/
+*.pyc
+
+# One-off scratch scripts/dumps from working the import pipeline - not part
+# of the app, regenerable, not meant to be tracked.
+.tmp-*
+.verify-*.json
