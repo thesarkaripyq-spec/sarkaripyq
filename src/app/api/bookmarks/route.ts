@@ -2,10 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isSameOrigin } from "@/lib/same-origin";
 
-const bodySchema = z.object({ questionId: z.string().uuid() });
+const bodySchema = z.object({ questionId: z.string().uuid() }).strict();
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 403 });
+  }
+
   const ip = getClientIp(request);
   if (!rateLimit(`bookmarks:${ip}`, 20, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
@@ -37,6 +42,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 403 });
+  }
+
   const ip = getClientIp(request);
   if (!rateLimit(`bookmarks:${ip}`, 20, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });

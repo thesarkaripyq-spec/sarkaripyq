@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isSameOrigin } from "@/lib/same-origin";
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 403 });
+  }
+
   const ip = getClientIp(request);
   if (!rateLimit(`profile-reset:${ip}`, 3, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });

@@ -2,12 +2,19 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isSameOrigin } from "@/lib/same-origin";
 
-const bodySchema = z.object({
-  reason: z.string().trim().min(1).max(500),
-});
+const bodySchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 403 });
+  }
+
   const { id: questionId } = await params;
 
   const ip = getClientIp(request);

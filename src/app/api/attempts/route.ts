@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { isSameOrigin } from "@/lib/same-origin";
 
-const bodySchema = z.object({
-  questionId: z.string().uuid(),
-  selectedOptionId: z.string().uuid().nullable(),
-  isCorrect: z.boolean(),
-});
+const bodySchema = z
+  .object({
+    questionId: z.string().uuid(),
+    selectedOptionId: z.string().uuid().nullable(),
+    isCorrect: z.boolean(),
+  })
+  .strict();
 
 export async function POST(request: Request) {
+  if (!isSameOrigin(request)) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 403 });
+  }
+
   const ip = getClientIp(request);
   if (!rateLimit(`attempts:${ip}`, 60, 60_000)) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
