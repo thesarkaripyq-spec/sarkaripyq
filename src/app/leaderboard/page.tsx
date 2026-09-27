@@ -15,7 +15,14 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { exam } = await searchParams;
-  return { title: exam ? `${exam.toUpperCase()} Leaderboard` : "Leaderboard" };
+  return {
+    title: exam ? `${exam.toUpperCase()} Leaderboard` : "Leaderboard",
+    description: "See how your SSC PYQ practice accuracy ranks against other aspirants, overall or by exam.",
+    // Canonicalizes to the unfiltered URL - the ?exam= filters are the same
+    // page's client-side view of one underlying leaderboard, not distinct
+    // content, matching how the rest of the app treats query-string variants.
+    alternates: { canonical: "/leaderboard" },
+  };
 }
 
 function FilterPill({ href, label, active }: { href: string; label: string; active: boolean }) {

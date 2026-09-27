@@ -16,7 +16,7 @@ export function FilterBar({
   return (
     <form
       action={action}
-      className="flex flex-wrap gap-2 border-b border-ink-100 bg-white px-4 py-3 md:sticky md:top-14"
+      className="flex flex-wrap gap-2 border-b border-ink-100 bg-white px-4 py-3 md:sticky md:top-[67px]"
     >
       <select
         name="exam"

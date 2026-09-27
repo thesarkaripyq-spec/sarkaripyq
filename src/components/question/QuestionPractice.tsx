@@ -102,6 +102,8 @@ export function QuestionPractice({
         <img
           src={question.image_url}
           alt={`Diagram for question ${index + 1}`}
+          loading="lazy"
+          decoding="async"
           className="mt-3 max-w-full rounded-md"
         />
       ) : null}
