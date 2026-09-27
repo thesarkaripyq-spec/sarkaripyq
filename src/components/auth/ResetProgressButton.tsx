@@ -7,13 +7,21 @@ export function ResetProgressButton() {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState(false);
 
   async function reset() {
     setPending(true);
+    setError(false);
     try {
-      await fetch("/api/profile/reset", { method: "POST" });
-      setConfirming(false);
-      router.refresh();
+      const res = await fetch("/api/profile/reset", { method: "POST" });
+      if (res.ok) {
+        setConfirming(false);
+        router.refresh();
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
     } finally {
       setPending(false);
     }
@@ -21,23 +29,28 @@ export function ResetProgressButton() {
 
   if (confirming) {
     return (
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={reset}
-          disabled={pending}
-          className="rounded-md bg-danger-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger-600 disabled:opacity-50"
-        >
-          {pending ? "Resetting…" : "Yes, reset everything"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setConfirming(false)}
-          disabled={pending}
-          className="rounded-md border border-ink-100 px-3 py-1.5 text-xs text-ink-500"
-        >
-          Cancel
-        </button>
+      <div className="mt-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={reset}
+            disabled={pending}
+            className="rounded-md bg-danger-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-danger-600 disabled:opacity-50"
+          >
+            {pending ? "Resetting…" : "Yes, reset everything"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={pending}
+            className="rounded-md border border-ink-100 px-3 py-1.5 text-xs text-ink-500"
+          >
+            Cancel
+          </button>
+        </div>
+        {error ? (
+          <p className="mt-2 text-xs text-danger-500">Something went wrong. Please try again.</p>
+        ) : null}
       </div>
     );
   }

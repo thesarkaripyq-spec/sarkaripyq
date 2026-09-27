@@ -8,10 +8,12 @@ export function BookmarkButton({ questionId }: { questionId: string }) {
   const [bookmarked, setBookmarked] = useState(false);
   const [pending, setPending] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
+  const [error, setError] = useState(false);
 
   async function toggle() {
     setPending(true);
     setNeedsAuth(false);
+    setError(false);
     try {
       const res = await fetch("/api/bookmarks", {
         method: bookmarked ? "DELETE" : "POST",
@@ -22,7 +24,13 @@ export function BookmarkButton({ questionId }: { questionId: string }) {
         setNeedsAuth(true);
         return;
       }
-      if (res.ok) setBookmarked((v) => !v);
+      if (res.ok) {
+        setBookmarked((v) => !v);
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
     } finally {
       setPending(false);
     }
@@ -46,6 +54,11 @@ export function BookmarkButton({ questionId }: { questionId: string }) {
       {needsAuth ? (
         <p className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-ink-100 bg-white p-2 text-xs text-ink-500 shadow-card">
           Sign in to save bookmarks.
+        </p>
+      ) : null}
+      {error ? (
+        <p className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-danger-50 bg-white p-2 text-xs text-danger-500 shadow-card">
+          Something went wrong. Try again.
         </p>
       ) : null}
     </div>
