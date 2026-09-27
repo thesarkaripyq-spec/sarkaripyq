@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getPaperBySlug, getSubjectBySlug, getSubjectsForExam } from "@/lib/data/exams";
 import { getQuestionByPaperAndNumber, getQuestionNumbersForPaper } from "@/lib/data/questions";
@@ -39,10 +40,12 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
   const paper = await getPaperBySlug(exam.id, yearNum, shift);
   if (!paper) notFound();
 
-  const [subjects, subjectFilter] = await Promise.all([
+  const [subjects, subjectFilter, requestHeaders] = await Promise.all([
     getSubjectsForExam(exam.id),
     subjectSlug ? getSubjectBySlug(subjectSlug) : Promise.resolve(null),
+    headers(),
   ]);
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   const questionList = await getQuestionNumbersForPaper(paper.id, subjectFilter?.id);
   const questionNumbers = questionList.map((item) => item.question_number);
@@ -88,6 +91,7 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
     <div>
       <script
         type="application/ld+json"
+        nonce={nonce}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <h1 className="sr-only">

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArrowRight, GraduationCap } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getSubjectsForExam, getYearsForExam } from "@/lib/data/exams";
@@ -31,10 +32,12 @@ export default async function ExamOverviewPage({ params }: Props) {
   const exam = await getExamBySlug(examSlug);
   if (!exam) notFound();
 
-  const [subjects, years] = await Promise.all([
+  const [subjects, years, requestHeaders] = await Promise.all([
     getSubjectsForExam(exam.id),
     getYearsForExam(exam.id),
+    headers(),
   ]);
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -49,6 +52,7 @@ export default async function ExamOverviewPage({ params }: Props) {
     <div>
       <script
         type="application/ld+json"
+        nonce={nonce}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <PageHero icon={GraduationCap} eyebrow={exam.name} title={`${exam.name} Previous Year Questions`} description={exam.full_name ?? undefined} />

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ChevronRight, Clock3 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getExamTiers, getPapersForExamYear } from "@/lib/data/exams";
@@ -34,10 +35,12 @@ export default async function ExamPyqYearPage({ params, searchParams }: Props) {
   const exam = await getExamBySlug(examSlug);
   if (!exam || !Number.isInteger(yearNum)) notFound();
 
-  const [papers, tiers] = await Promise.all([
+  const [papers, tiers, requestHeaders] = await Promise.all([
     getPapersForExamYear(exam.id, yearNum, tier),
     getExamTiers(exam.id),
+    headers(),
   ]);
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
   // Only 404 when the year itself has nothing published — a tier filter
   // that happens to match zero papers for an otherwise-valid year should
   // fall through to the empty state below, not a hard 404.
@@ -58,6 +61,7 @@ export default async function ExamPyqYearPage({ params, searchParams }: Props) {
     <div>
       <script
         type="application/ld+json"
+        nonce={nonce}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <PageHero
