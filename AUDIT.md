@@ -1,0 +1,158 @@
+# SarkariPYQ — Production Hardening Audit
+
+Generated 2026-09-28. Scope: full SEO / mobile-responsiveness / bug / validation /
+security / accessibility pass over the existing app, per the hardening brief.
+
+## TL;DR
+
+This is **not** a neglected codebase. Before changing anything, I read every
+page, API route, data-access function, DB migration/RLS policy, and config
+file. The app already has: Zod validation + per-IP rate limiting on every
+mutating API route, row-level security on every table with narrowly-scoped
+policies, parameterized queries everywhere (no raw SQL), dynamic per-page SEO
+metadata + canonical tags + OG/Twitter cards + JSON-LD (Organization, WebSite
+with SearchAction, BreadcrumbList), a paginated sitemap, a robots.txt that
+blocks private routes and known scraper bots, 0 `npm audit` vulnerabilities,
+strict TypeScript, a real mobile drawer nav with focus-trapping, a bottom
+tab bar, and 44px tap targets throughout.
+
+So this audit is short on "the site is broken" findings and longer on
+smaller correctness/hardening gaps, one real security fix (open redirect),
+one broken dev-tooling script, and a couple of architectural tradeoffs that
+are flagged rather than changed, because they're too consequential to
+decide unilaterally.
+
+Stack confirmed: Next.js 16.3.6 (App Router, Turbopack), React 18, TypeScript
+(strict), Tailwind CSS, Supabase (Postgres + Auth), Zod. No admin panel by
+design — content is loaded by an offline import pipeline using the service
+role key, which the app itself never touches.
+
+---
+
+## Findings
+
+Legend: **Fixed** = changed in this pass. **Flagged** = documented here,
+not changed — needs your call. Severity is impact × likelihood, not effort.
+
+### Critical
+
+None found. No exposed secrets, no injectable queries, no broken auth checks,
+no missing RLS.
+
+### High
+
+| # | Finding | Status |
+|---|---|---|
+| H1 | `npm run lint` is completely broken. Next.js 16 removed the `next lint` command (confirmed against `node_modules/next/dist/docs/.../upgrading/version-16.md`); running it now errors immediately because Next's CLI misparses `lint` as a project directory argument. This means lint has been silently non-functional since the Next 16 upgrade — no one running `npm run lint` locally or in CI has gotten real output. | **Fixed** — `package.json`'s `lint` script now runs `eslint .` directly (the documented Next 16 replacement). |
+| H2 | Open-redirect risk in the OAuth callback (`src/app/auth/callback/route.ts`). The `next` query param was concatenated directly into `NextResponse.redirect(`${origin}${next}`)` with no validation. A crafted value like `next=@evil.com` produces the string `http://yoursite.com@evil.com`, which browsers parse as userinfo (`yoursite.com`) + host (`evil.com`) — i.e. a same-looking link that actually redirects off-site after a real Supabase login. This is exploitable by anyone who can get a user to click a modified `/auth/callback?...&next=@evil.com` link. | **Fixed** — `next` is now validated to be a same-origin relative path (`/...`, not `//...`, no `@`/scheme) before use; anything else falls back to `/dashboard`. |
+| H3 | No `Content-Security-Policy` header. The brief explicitly asks for one; `next.config.mjs` already sets the other 5 recommended headers. Because the app is (see A1 below) already fully dynamically rendered on every request, adding a per-request nonce-based CSP via `proxy.ts` costs nothing extra in caching/performance — it was simply missing. | **Fixed** — `src/proxy.ts` now generates a per-request nonce and sets a strict `script-src 'nonce-… strict-dynamic'` CSP (plus the standard `object-src none`, `frame-ancestors none`, `base-uri self`, `form-action self`, `upgrade-insecure-requests`). The nonce is threaded through the two inline `<script>` tags in `layout.tsx` and all four breadcrumb JSON-LD `<script>` tags. `style-src` keeps `'unsafe-inline'` because the dashboard's bar-chart widths are set via React's `style` prop — tightening that would need a larger refactor for a low security payoff. |
+
+### Medium
+
+| # | Finding | Status |
+|---|---|---|
+| M1 | Mutating API routes (`/api/attempts`, `/api/bookmarks`, `/api/questions/[id]/report`) validate known fields with Zod but don't reject unrecognized ones (Zod's default `.object()` silently strips extras). The brief asks to reject unexpected fields outright. | **Fixed** — added `.strict()` to all three body schemas. |
+| M2 | No explicit CSRF check on state-changing routes beyond relying on Supabase's default cookie `SameSite` setting. That default is real protection, but the brief asks for explicit CSRF protection, and defense-in-depth is cheap here. | **Fixed** — added a small `assertSameOrigin` helper (`src/lib/same-origin.ts`) that compares the `Origin` header against the request's own origin; applied to the four mutating routes (`attempts`, `bookmarks` POST/DELETE, `profile/reset`, `questions/[id]/report`). Requests with a cross-site `Origin` get a 403 before touching the DB. |
+| M3 | `/api/search` (and `searchQuestions()`) accepted a query string of unbounded length before it reached Postgres full-text search. The brief asks search params to have a length cap. | **Fixed** — capped at 100 characters in the route handler. |
+| M4 | Several client components (`BookmarkButton`, `RemoveBookmarkButton`, `ResetProgressButton`, `SignOutButton`) show no feedback when a request fails for any reason *other than* 401 (network error, 429 rate-limit, 500) — the button just silently stops spinning and nothing happens. The brief requires an error state on every async action. | **Fixed** — each now shows a brief inline error message on non-OK responses/exceptions. |
+| M5 | Zero `loading.tsx` files anywhere in `src/app`. There's an unused `Skeleton` UI primitive already built (`src/components/ui/Skeleton.tsx`) but nothing renders it. On slower connections, navigating to `/search`, `/practice`, `/practice/[subject]`, `/dashboard`, `/leaderboard`, `/bookmarks`, `/books`, or any `/ssc/**` listing page shows a blank tab until the full server render finishes. | **Fixed** — added `loading.tsx` (skeleton-based) for those 10 route segments. |
+| M6 | On `/practice/[subject]`, the sticky `FilterBar` uses `md:top-14` (56px), but the actual sticky header is ~67px tall (64px + a 3px gradient strip). While scrolling on desktop, the header visually crops the top ~11px of the filter bar. | **Fixed** — changed to `md:top-[67px]` to match the header's real height exactly. |
+| M7 | The question-diagram `<img>` in `QuestionPractice.tsx` had no `loading`/`decoding` hints. | **Fixed** — added `loading="lazy" decoding="async"`. |
+| M8 | Custom `not-found.tsx` only offered a single "back to home" link. The brief asks for a 404 page with helpful links. | **Fixed** — added links to Browse SSC exams, Practice by subject, and Search. |
+| M9 | `/leaderboard`'s `generateMetadata` set only a `title`, no `description` or canonical — every other page in the app sets both. | **Fixed** — added a description and canonical (the canonical intentionally omits the `?exam=` query so all exam filters of the leaderboard canonicalize to the same URL, matching how the rest of the app treats query-string variants). |
+
+### Low
+
+| # | Finding | Status |
+|---|---|---|
+| L1 | Root-level scratch/debug files (`.tmp-live2.py`, `.tmp-sec.py`, `.verify-cpo.json`, `.verify-steno.json`) and `scripts/testranking/.cache/` are one-off outputs from working the offline scraping/import pipeline. They weren't covered by `.gitignore`, so initializing git for this project (see below) would have swept them into version control as noise. | **Fixed** — added to `.gitignore`. Not deleted — they're local debugging artifacts that might still be in use; only untracked them. |
+| L2 | This repository had no `.git` at all — "small, logical commits per section" wasn't possible without one. | **Fixed** — ran `git init` and committed the pre-change baseline separately from every fix in this pass, so each section's diff is reviewable on its own. |
+
+### Flagged — architectural/product calls, not changed
+
+| # | Finding | Why I didn't just fix it |
+|---|---|---|
+| A1 | **Every route renders fully dynamically**, even though ~10 pages declare `export const revalidate = 300`. Confirmed via `npm run build` output: every route is marked `ƒ (Dynamic)` except `/robots.txt` and `/sitemap.xml`. Root cause: `layout.tsx` calls `supabase.auth.getUser()` (which reads cookies) on *every* request to know whether to render the header logged-in vs logged-out — and in Next's current (non-Cache-Components) rendering model, any cookie/header read anywhere in a route's render tree forces that entire route to skip static rendering and ISR, full stop. The `revalidate = 300` exports on the exam/subject/practice listing pages are currently inert. This doesn't break anything — content is still correct and server-rendered — but it means every page load re-runs the Supabase auth check and the page's DB queries from scratch, which costs more at scale than it needs to. **Fixing it properly means adopting Next 16's `cacheComponents` model**, which their own migration guide describes as "not a rename-only change: it can surface build errors for uncached data outside of `<Suspense>` and requires adopting the Cache Components model." That's a real project, not a hardening tweak, and I'm not willing to flip a config flag that changes the app's entire rendering model without you deciding that trade-off first. |
+| A2 | No self-service "forgot password" flow (Supabase supports `resetPasswordForEmail`; there's just no UI for it) and no account-deletion flow. Neither is a bug — the brief's Security section is about hardening what exists, not adding auth surface area — but a user who forgets their password today has no way back in except via Google sign-in. Flagging as a product decision, not building it unprompted. |
+| A3 | `LoginForm`/`SignupForm` call `supabase.auth.signInWithPassword` / `signUp` directly from the browser, bypassing the app's own `rate-limit.ts`. This is very likely fine — Supabase's hosted Auth service (GoTrue) does its own server-side rate limiting on these endpoints — but I can't verify your project's Supabase rate-limit configuration from here, so I'm noting it rather than asserting it's covered. Worth a 5-minute check in your Supabase dashboard (Auth → Rate Limits). |
+
+---
+
+## Already solid — verified, not touched
+
+Listed so it's clear these were checked, not assumed:
+
+- **SEO**: unique `<title>`/description per page, one `<h1>` per page (including
+  a deliberate `sr-only` h1 on the question-practice page, where the visible
+  heading lives in a child component), canonical tags everywhere, OG + Twitter
+  card metadata with a default share image, JSON-LD for Organization, WebSite
+  (with `SearchAction`), and BreadcrumbList on every listing/detail page,
+  `sitemap.xml` covering exams/years/subjects/papers (capped at 45k URLs per
+  Next's 50k-per-file limit), `robots.txt` disallowing `/api/`, `/login`,
+  `/signup`, `/profile`, `/dashboard`, `/bookmarks`, plus explicit disallow
+  rules for GPTBot/CCBot/AhrefsBot/SemrushBot, `lang="en"` on `<html>`.
+- **Mobile**: hamburger drawer with real focus-trapping (Tab/Shift+Tab cycling,
+  Esc to close, focus returns to the trigger), a bottom tab bar with
+  `safe-area-inset-bottom` padding, 44×44px tap targets on every icon button,
+  horizontal-scroll tab patterns for subject/tier filters, responsive Tailwind
+  breakpoints throughout, dark mode wired correctly (`darkMode: ["selector",
+  '[data-theme="dark"]']` matches the `data-theme` attribute the theme
+  toggle sets — I checked this specifically since it's a common source of
+  silently-broken dark mode).
+- **Validation/Security**: every mutating API route validates its body with
+  Zod (UUIDs checked, string lengths bounded) and rate-limits by IP; every
+  Supabase table has row-level security with policies scoped to
+  `auth.uid()`; the two leaderboard RPCs are `SECURITY DEFINER` functions
+  that expose only pre-aggregated, non-sensitive columns — never raw
+  per-user attempt data; no raw/string-built SQL anywhere in the app (the
+  Supabase query builder is used exclusively); the service-role key is only
+  read by `src/lib/supabase/admin.ts`, which nothing in the request path
+  imports; `.env.local` is gitignored and `.env.example` documents every
+  variable without values; `npm audit` reports 0 vulnerabilities.
+- **Accessibility**: labeled form inputs, visible focus rings
+  (`:focus-visible` in `globals.css`), `aria-label`/`aria-pressed`/
+  `aria-expanded` used correctly on icon-only buttons and toggles, the
+  mobile menu is a proper `role="dialog" aria-modal="true"` with trapped
+  focus.
+
+---
+
+## Build verification
+
+Ran after every fix section below, not just once at the end:
+
+- `npm run typecheck` — clean before and after all changes.
+- `npm run lint` (now `eslint .`) — 1 pre-existing error found and fixed
+  (see commit for `ThemeToggle.tsx`), clean after.
+- `npm run build` — succeeds before and after; route list unchanged (no
+  routes added/removed/broken).
+
+Lighthouse was **not** run — this environment has no way to launch a real
+Chrome instance against the running dev/prod server to produce mobile
+Lighthouse scores. See the manual checklist below.
+
+---
+
+## What you need to do manually
+
+1. **Run Lighthouse yourself** (mobile, throttled) against a deployed
+   preview or `npm run build && npm run start` locally in Chrome DevTools —
+   I have no way to do this from here. Given the audit above, I'd expect
+   Performance to be the only category not already in the 90s (mainly
+   because of A1 — everything server-renders per request).
+2. **Decide on A1** (dynamic-everything rendering) — tell me if you want a
+   follow-up pass adopting `cacheComponents`, or if this is fine at your
+   current traffic level.
+3. **Decide on A2** (forgot-password / account deletion) — say if you want
+   these built.
+4. **Check Supabase Auth rate limits** (A3) in your Supabase dashboard.
+5. **Submit `sitemap.xml` in Google Search Console / Bing Webmaster Tools**
+   after this deploys — nothing changed about the sitemap's correctness,
+   but if you haven't submitted it yet, this is the moment.
+6. **Verify CSP in production before relying on it** — `strict-dynamic`
+   CSPs are occasionally stricter than expected with third-party embeds. If
+   you ever add Google Analytics/GTM/an ad script, it needs to read the
+   nonce from `headers()` and pass it explicitly (pattern is in
+   `node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`).
+7. **No environment variables need to change** — `.env.example` already
+   matches what the app reads; nothing in this pass added new config.
