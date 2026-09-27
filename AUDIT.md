@@ -17,10 +17,12 @@ strict TypeScript, a real mobile drawer nav with focus-trapping, a bottom
 tab bar, and 44px tap targets throughout.
 
 So this audit is short on "the site is broken" findings and longer on
-smaller correctness/hardening gaps, one real security fix (open redirect),
-one broken dev-tooling script, and a couple of architectural tradeoffs that
-are flagged rather than changed, because they're too consequential to
-decide unilaterally.
+smaller correctness/hardening gaps: one real security fix (open redirect),
+one broken dev-tooling script, one live bug caught by actually running the
+app against your database (search timing out on ordinary queries — flagged,
+not fixed, since diagnosing it further needs direct DB access I don't have),
+and a couple of architectural tradeoffs that are flagged rather than
+changed, because they're too consequential to decide unilaterally.
 
 Stack confirmed: Next.js 16.3.6 (App Router, Turbopack), React 18, TypeScript
 (strict), Tailwind CSS, Supabase (Postgres + Auth), Zod. No admin panel by
@@ -46,6 +48,7 @@ no missing RLS.
 | H1 | `npm run lint` is completely broken. Next.js 16 removed the `next lint` command (confirmed against `node_modules/next/dist/docs/.../upgrading/version-16.md`); running it now errors immediately because Next's CLI misparses `lint` as a project directory argument. This means lint has been silently non-functional since the Next 16 upgrade — no one running `npm run lint` locally or in CI has gotten real output. | **Fixed** — `package.json`'s `lint` script now runs `eslint .` directly (the documented Next 16 replacement). |
 | H2 | Open-redirect risk in the OAuth callback (`src/app/auth/callback/route.ts`). The `next` query param was concatenated directly into `NextResponse.redirect(`${origin}${next}`)` with no validation. A crafted value like `next=@evil.com` produces the string `http://yoursite.com@evil.com`, which browsers parse as userinfo (`yoursite.com`) + host (`evil.com`) — i.e. a same-looking link that actually redirects off-site after a real Supabase login. This is exploitable by anyone who can get a user to click a modified `/auth/callback?...&next=@evil.com` link. | **Fixed** — `next` is now validated to be a same-origin relative path (`/...`, not `//...`, no `@`/scheme) before use; anything else falls back to `/dashboard`. |
 | H3 | No `Content-Security-Policy` header. The brief explicitly asks for one; `next.config.mjs` already sets the other 5 recommended headers. Because the app is (see A1 below) already fully dynamically rendered on every request, adding a per-request nonce-based CSP via `proxy.ts` costs nothing extra in caching/performance — it was simply missing. | **Fixed** — `src/proxy.ts` now generates a per-request nonce and sets a strict `script-src 'nonce-… strict-dynamic'` CSP (plus the standard `object-src none`, `frame-ancestors none`, `base-uri self`, `form-action self`, `upgrade-insecure-requests`). The nonce is threaded through the two inline `<script>` tags in `layout.tsx` and all four breadcrumb JSON-LD `<script>` tags. `style-src` keeps `'unsafe-inline'` because the dashboard's bar-chart widths are set via React's `style` prop — tightening that would need a larger refactor for a low security payoff. |
+| H4 | **Search intermittently 500s** for ordinary queries. Verified live against a `next start` build against your real database: `GET /api/search?q=math` (and the equivalent `/search?q=math` page) fails with a Postgres `57014` — `canceling statement due to statement timeout`. This isn't a fluke: two *other* comments already in this codebase (`src/lib/data/exams.ts` on `getSiteStats`, `src/lib/data/dashboard.ts` on `getUserAttempts`) independently mention hitting the same 57014 on other queries and worked around it there. The full-text search behind `/search` and the SearchBar dropdown hasn't been worked around yet, so a common short search term can fail outright. | **Flagged, not fixed** — root-causing this needs `EXPLAIN`/index inspection against your actual database, and a sandbox rule in this environment correctly blocked me from connecting to it directly ("Production Reads"). I capped the query length (M3) as a real but partial mitigation — it doesn't fix this specific case, since "math" is only 4 characters. **What I'd check first, in order:** (1) Supabase Dashboard → Database → Query Performance for `search_vector` — confirm the GIN index (`idx_questions_search`) is actually being used for these queries, not a sequential scan; (2) whether the anon role's `statement_timeout` (Dashboard → Settings → Database) is unusually low for this query's cost, given the same 57014 has already shown up elsewhere in this codebase at the current data scale; (3) whether the 3-way join (`questions` → `papers` → `exams`) inside `searchQuestions()` is defeating the GIN index scan — if so, filtering to published questions via a partial index, or restructuring the join, may be a real fix. I didn't want to guess at a schema/index change against your production data without being able to verify it actually helps. |
 
 ### Medium
 
@@ -53,9 +56,9 @@ no missing RLS.
 |---|---|---|
 | M1 | Mutating API routes (`/api/attempts`, `/api/bookmarks`, `/api/questions/[id]/report`) validate known fields with Zod but don't reject unrecognized ones (Zod's default `.object()` silently strips extras). The brief asks to reject unexpected fields outright. | **Fixed** — added `.strict()` to all three body schemas. |
 | M2 | No explicit CSRF check on state-changing routes beyond relying on Supabase's default cookie `SameSite` setting. That default is real protection, but the brief asks for explicit CSRF protection, and defense-in-depth is cheap here. | **Fixed** — added a small `assertSameOrigin` helper (`src/lib/same-origin.ts`) that compares the `Origin` header against the request's own origin; applied to the four mutating routes (`attempts`, `bookmarks` POST/DELETE, `profile/reset`, `questions/[id]/report`). Requests with a cross-site `Origin` get a 403 before touching the DB. |
-| M3 | `/api/search` (and `searchQuestions()`) accepted a query string of unbounded length before it reached Postgres full-text search. The brief asks search params to have a length cap. | **Fixed** — capped at 100 characters in the route handler. |
+| M3 | `/api/search` and the `/search` page accepted a query string of unbounded length before it reached Postgres full-text search. The brief asks search params to have a length cap. Note: this doesn't address H4 above, which reproduces on a 4-character query. | **Fixed** — capped at 100 characters in both places. |
 | M4 | Several client components (`BookmarkButton`, `RemoveBookmarkButton`, `ResetProgressButton`, `SignOutButton`) show no feedback when a request fails for any reason *other than* 401 (network error, 429 rate-limit, 500) — the button just silently stops spinning and nothing happens. The brief requires an error state on every async action. | **Fixed** — each now shows a brief inline error message on non-OK responses/exceptions. |
-| M5 | Zero `loading.tsx` files anywhere in `src/app`. There's an unused `Skeleton` UI primitive already built (`src/components/ui/Skeleton.tsx`) but nothing renders it. On slower connections, navigating to `/search`, `/practice`, `/practice/[subject]`, `/dashboard`, `/leaderboard`, `/bookmarks`, `/books`, or any `/ssc/**` listing page shows a blank tab until the full server render finishes. | **Fixed** — added `loading.tsx` (skeleton-based) for those 10 route segments. |
+| M5 | Zero `loading.tsx` files anywhere in `src/app`. There's an unused `Skeleton` UI primitive already built (`src/components/ui/Skeleton.tsx`) but nothing renders it. On slower connections, navigating to `/search`, `/practice`, `/practice/[subject]`, `/dashboard`, `/leaderboard`, `/bookmarks`, `/books`, or any `/ssc/**` listing page shows a blank tab until the full server render finishes. | **Fixed** — added a `loading.tsx` (skeleton-based, shaped to roughly match each page) for the 12 route segments that run a real data fetch. |
 | M6 | On `/practice/[subject]`, the sticky `FilterBar` uses `md:top-14` (56px), but the actual sticky header is ~67px tall (64px + a 3px gradient strip). While scrolling on desktop, the header visually crops the top ~11px of the filter bar. | **Fixed** — changed to `md:top-[67px]` to match the header's real height exactly. |
 | M7 | The question-diagram `<img>` in `QuestionPractice.tsx` had no `loading`/`decoding` hints. | **Fixed** — added `loading="lazy" decoding="async"`. |
 | M8 | Custom `not-found.tsx` only offered a single "back to home" link. The brief asks for a 404 page with helpful links. | **Fixed** — added links to Browse SSC exams, Practice by subject, and Search. |
@@ -126,6 +129,14 @@ Ran after every fix section below, not just once at the end:
   (see commit for `ThemeToggle.tsx`), clean after.
 - `npm run build` — succeeds before and after; route list unchanged (no
   routes added/removed/broken).
+- Also ran a real `npm run start` against a production build and `curl`'d
+  it directly (not just typecheck/build) to confirm the new CSP header and
+  nonce actually work end-to-end — the header is present, every script tag
+  (Next's own bundles and the hand-written inline ones) carries the matching
+  nonce, and `'unsafe-eval'` is correctly absent under a true production
+  `NODE_ENV`. This same live check is what surfaced H4 (`/search` timing out
+  on a real query against your database) — a bug that reading the code
+  alone would never have shown.
 
 Lighthouse was **not** run — this environment has no way to launch a real
 Chrome instance against the running dev/prod server to produce mobile
@@ -135,24 +146,29 @@ Lighthouse scores. See the manual checklist below.
 
 ## What you need to do manually
 
-1. **Run Lighthouse yourself** (mobile, throttled) against a deployed
+1. **Diagnose H4 (search timeouts)** — I couldn't connect to your database
+   directly (correctly blocked as a production read). Check Supabase
+   Dashboard → Database → Query Performance for the `questions` table, and
+   see H4 above for exactly what to look at. Ping me with what you find and
+   I can turn it into a real fix.
+2. **Run Lighthouse yourself** (mobile, throttled) against a deployed
    preview or `npm run build && npm run start` locally in Chrome DevTools —
    I have no way to do this from here. Given the audit above, I'd expect
    Performance to be the only category not already in the 90s (mainly
    because of A1 — everything server-renders per request).
-2. **Decide on A1** (dynamic-everything rendering) — tell me if you want a
+3. **Decide on A1** (dynamic-everything rendering) — tell me if you want a
    follow-up pass adopting `cacheComponents`, or if this is fine at your
    current traffic level.
-3. **Decide on A2** (forgot-password / account deletion) — say if you want
+4. **Decide on A2** (forgot-password / account deletion) — say if you want
    these built.
-4. **Check Supabase Auth rate limits** (A3) in your Supabase dashboard.
-5. **Submit `sitemap.xml` in Google Search Console / Bing Webmaster Tools**
+5. **Check Supabase Auth rate limits** (A3) in your Supabase dashboard.
+6. **Submit `sitemap.xml` in Google Search Console / Bing Webmaster Tools**
    after this deploys — nothing changed about the sitemap's correctness,
    but if you haven't submitted it yet, this is the moment.
-6. **Verify CSP in production before relying on it** — `strict-dynamic`
+7. **Verify CSP in production before relying on it** — `strict-dynamic`
    CSPs are occasionally stricter than expected with third-party embeds. If
    you ever add Google Analytics/GTM/an ad script, it needs to read the
    nonce from `headers()` and pass it explicitly (pattern is in
    `node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`).
-7. **No environment variables need to change** — `.env.example` already
+8. **No environment variables need to change** — `.env.example` already
    matches what the app reads; nothing in this pass added new config.
