@@ -478,13 +478,80 @@ you read this:
   `db:backup` script you run yourself before migrations), say so — small
   and easy to add once you tell me where you'd want the dump written.
 
-#### Flagged — needs a decision from you, not built
+#### Flagged — decisions received (2026-09-28)
 
-| # | Item | Why it's flagged, not built |
+| # | Item | Decision |
 |---|---|---|
-| P4-1 | **Replace `scripts/run-migrations.mjs` with real Supabase CLI migrations** (you asked for this explicitly, including marking 0001-0009 as already-applied so nothing re-runs). Investigated: `supabase/config.toml` doesn't exist (never `supabase init`'d), the CLI has never been `supabase link`'d to your project (no linked project ref), and the 9 existing migration files are named `NNNN_name.sql`, not the CLI's `<14-digit-timestamp>_name.sql` convention. `supabase init` itself is safe (purely local scaffolding, no network/DB call) and I'm comfortable doing that part myself — but making the CLI *recognize* migrations 0001-0009 as already-applied requires `supabase link` (needs **your** Supabase account — it's an interactive/token-based login I don't have) and then `supabase migration repair <version> --status applied` for each one, which is a **write to the remote project's migration ledger table**, exactly the kind of DB write the rules for this pass say must be run by you, not me. | Needs your account (CLI login/link) + you to run the repair commands yourself. I can prepare everything short of that (init, proposed renamed filenames preserving order, the exact repair commands to paste) if you want to proceed. |
-| P4-2 | **Error tracking service.** No Sentry/Bugsnag/equivalent is installed. `onRequestError` (above) already gives you structured server-error logs either way, but a real tracking service adds alerting, stack traces with source maps, and issue grouping. | Needs a decision on which service (Sentry is the common default for Next.js and has a first-party SDK) and **your** account/DSN for it — a paid-service signup, not something to pick for you. |
-| P4-3 | **Legal pages** (`/privacy`, `/terms` — neither exists; nothing links to them from `Footer.tsx` either). I can build the routes, metadata, and footer links, but the actual policy *text* is a legal/product decision — generating placeholder legal text and shipping it as if reviewed would be worse than not having the pages at all. | Tell me how you want to handle the content: you provide the text, you want a clearly-marked draft/placeholder to replace before launch, or you already have text hosted elsewhere to link to instead. |
+| P4-1 | Replace `scripts/run-migrations.mjs` with real Supabase CLI migrations. | **You'll run `link`+`repair` yourself.** Everything short of that is prepared — see the step-by-step below. |
+| P4-2 | Error-tracking service (Sentry or similar). | **Skip for now.** `onRequestError` → structured logs is enough for the moment; revisit if you want alerting/source-mapped stack traces later. |
+| P4-3 | Legal pages (`/privacy`, `/terms`) content. | **Clearly-marked placeholder** — built below with the routes/metadata/footer links now, obvious "replace before launch" text standing in for real policy content. |
+
+#### P4-1 — adopting the Supabase CLI for migrations: your steps
+
+Done already (safe, local-only, no account/network/DB access needed):
+`supabase init` — added `supabase/config.toml` and `supabase/.gitignore`.
+Didn't touch `supabase/migrations/` or `supabase/seed/` at all (verified in
+a throwaway scratch copy before running it for real). One config value
+fixed from its default: `db.seed.sql_paths` defaulted to a single
+top-level `./seed.sql`, which doesn't match this repo's actual
+`supabase/seed/0001_sample_data.sql` layout — pointed at `./seed/*.sql`
+instead (a real glob-pattern mismatch the CLI's own default wouldn't have
+caught for you).
+
+**Check this yourself before going further**: `config.toml` defaults
+`db.major_version = 17` — this has to match your actual project's
+Postgres version or local CLI commands (`db diff`, `db reset`, etc.) can
+misbehave later. Check Dashboard → Settings → Database, or run
+`SELECT version();` in the SQL Editor, and edit `supabase/config.toml` if
+it doesn't say 17.
+
+**What I verified vs. couldn't verify about the existing filenames**: the
+9 files are named `0001_init.sql` … `0009_catalog_lookup_functions.sql` —
+short numeric prefixes, not the CLI's own `<14-digit-timestamp>_name.sql`
+convention (confirmed: `supabase migration new` generates
+`20260928153819_probe_name.sql`-style names). Whether the CLI's local
+file *parser* accepts a short numeric prefix like `0001` or requires the
+full 14 digits, I could not pin down with certainty — official docs just
+say "`<timestamp>_name.sql`" without giving the exact regex, and one real
+GitHub issue (supabase/cli#6036) about 8-digit-vs-14-digit prefixes
+colliding suggests the parser is more permissive than "exactly 14
+digits," but that's evidence, not confirmation. I'm not going to rename
+9 already-shipped, already-referenced-by-name migration files on a guess.
+
+**Your steps, in order:**
+
+1. `supabase link --project-ref <your-project-ref>` (find the ref in
+   Dashboard → Settings → General). This is interactive/token-based
+   auth against your account — I can't do this part.
+2. `supabase migration list` — **read-only**, just prints local vs.
+   remote migrations side by side. This is the empirical answer to the
+   filename question above: if all 9 show up under "Local," the names
+   are fine as-is; if any are missing/skipped, they need renaming. Paste
+   me the output if you want help interpreting it.
+3. Depending on what step 2 shows:
+   - **If all 9 are recognized** (expected: remote shows none applied,
+     since they were run via the custom script, bypassing the CLI's
+     ledger entirely): mark them applied without re-running them —
+     `supabase migration repair 0001 0002 0003 0004 0005 0006 0007 0008 0009 --status applied`
+     (one command — `repair` accepts multiple versions at once).
+   - **If some/all aren't recognized**: tell me and I'll give you an
+     exact `git mv` sequence to rename them to 14-digit form. To
+     preserve order unambiguously and never collide with a real
+     `supabase migration new` timestamp (always current UTC time), I'd
+     use an obviously-synthetic anchor date in the past, e.g.
+     `20200101000001_init.sql` … `20200101000009_catalog_lookup_functions.sql`
+     — clearly not real application dates, just an ordering marker.
+4. Run `supabase migration list` again to confirm local and remote now
+   agree, with nothing pending.
+5. Once that's clean, tell me — I'll remove `scripts/run-migrations.mjs`
+   and `db:migrate` from `package.json` and document `supabase migration
+   new <name>` + `supabase db push` as the new workflow. Not doing that
+   removal now, before you've confirmed the CLI path actually works
+   end-to-end on your project — don't want to delete a working tool
+   before its replacement is verified.
+
+`scripts/seed.mjs`/`db:seed` are untouched either way — seeding local dev
+data isn't part of what you asked to move to the CLI.
 
 ---
 
