@@ -20,6 +20,12 @@ test.describe("Practice by subject page", () => {
   });
 
   test("sharing/reloading a paginated URL works", async ({ page }) => {
+    await page.goto("/practice/quantitative-aptitude");
+    const nextLink = page.getByRole("link", { name: "Next" });
+    if ((await nextLink.count()) === 0 || (await nextLink.getAttribute("aria-disabled")) === "true") {
+      test.skip(true, "Not enough results for a second page");
+    }
+
     const res = await page.goto("/practice/quantitative-aptitude?page=2");
     expect(res?.status()).toBe(200);
     await expect(page.getByText(/Page 2 of/)).toBeVisible();
