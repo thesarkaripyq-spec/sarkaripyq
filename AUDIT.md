@@ -117,19 +117,42 @@ query, independent of the compute-tier theory above: it fetches one row
 per matching **question** (unbounded, and until this fix had no
 `is_published` filter) just to dedupe down to ~5 distinct subjects in JS,
 instead of asking Postgres for the distinct rows directly. Added the
-missing `is_published` filter (safe, applied immediately). The complete
-fix — push the `DISTINCT` into Postgres via an RPC function, the same
-pattern `get_leaderboard` already uses — needs a migration and is flagged
-for your call, not applied unilaterally. **This means H4 may not be a
-single root cause** — the original search-timeout finding (query itself
-fast, likely a genuine Free-tier resource constraint) and this
-newly-found query-shape inefficiency are independent problems that happen
-to share an error code.
+missing `is_published` filter (safe, applied immediately). **This means
+H4 was never a single root cause** — the original search-timeout finding
+(query itself fast, likely a genuine Free-tier resource constraint) and
+this query-shape inefficiency are independent problems that happened to
+share an error code.
 
-**Deferred**: Phase 1 also asks for an automated test that fails if a
+**Resolved**: migration `0009_catalog_lookup_functions.sql` pushes the
+`DISTINCT`/`GROUP BY` into Postgres for `get_subjects_for_exam` and four
+other functions found to have the identical shape while auditing
+`exams.ts`/`questions.ts` for it (`get_years_for_exam`, `get_exam_tiers`,
+`get_years_for_subject`, and the aggregate case `get_paper_counts_by_exam`).
+`SECURITY INVOKER`, not `DEFINER` — none of these need to bypass RLS the
+way `get_leaderboard` does. Applied by the user, verified against a real
+production build, and confirmed live during e2e testing: the retry
+logging fired correctly (`getSubjectsForExam` and `listQuestionsBySubject`
+both hit and recovered from a real 57014 during the same test run,
+without failing the request the user would have seen).
+
+**Also surfaced by the same e2e run**: running the Playwright suite at
+full parallelism (10 workers) produced one real, reproducible flaky
+failure traced to concurrent DB load on the Free tier — the identical
+test passed cleanly in isolation. Capped to 4 workers as a pragmatic
+mitigation; this suite runs against the live Supabase project (no local
+Postgres/Docker available in this environment for a true isolated test
+DB), which is itself a scope limitation for Phase 5 to address with
+proper local-Supabase test infrastructure, not something fixed here.
+
+**Original search-timeout finding — status unchanged, still open**: three
+attempts to get the real Block A–D diagnostic numbers from the user all
+arrived as template placeholders rather than actual data. Root cause and
+ranked fix options for *that* specific finding remain undetermined;
+nothing here should be read as resolving it.
+
+**Deferred**: Phase 1 also asked for an automated test that fails if a
 short common search term errors or times out. Vitest now exists in this
-repo (added in Phase 2 for the public-client regression test), but a
-*meaningful* version of this test needs a real database connection to
+repo, but a *meaningful* version needs a real database connection to
 actually catch a timeout regression — mocking the client wouldn't test
 anything real. That's squarely what Phase 5's local-Supabase test
 infrastructure is for; tracked there, not forgotten.
