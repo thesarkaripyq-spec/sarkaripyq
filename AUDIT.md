@@ -49,6 +49,7 @@ no missing RLS.
 | H2 | Open-redirect risk in the OAuth callback (`src/app/auth/callback/route.ts`). The `next` query param was concatenated directly into `NextResponse.redirect(`${origin}${next}`)` with no validation. A crafted value like `next=@evil.com` produces the string `http://yoursite.com@evil.com`, which browsers parse as userinfo (`yoursite.com`) + host (`evil.com`) — i.e. a same-looking link that actually redirects off-site after a real Supabase login. This is exploitable by anyone who can get a user to click a modified `/auth/callback?...&next=@evil.com` link. | **Fixed** — `next` is now validated to be a same-origin relative path (`/...`, not `//...`, no `@`/scheme) before use; anything else falls back to `/dashboard`. |
 | H3 | No `Content-Security-Policy` header. The brief explicitly asks for one; `next.config.mjs` already sets the other 5 recommended headers. Because the app is (see A1 below) already fully dynamically rendered on every request, adding a per-request nonce-based CSP via `proxy.ts` costs nothing extra in caching/performance — it was simply missing. | **Fixed** — `src/proxy.ts` now generates a per-request nonce and sets a strict `script-src 'nonce-… strict-dynamic'` CSP (plus the standard `object-src none`, `frame-ancestors none`, `base-uri self`, `form-action self`, `upgrade-insecure-requests`). The nonce is threaded through the two inline `<script>` tags in `layout.tsx` and all four breadcrumb JSON-LD `<script>` tags. `style-src` keeps `'unsafe-inline'` because the dashboard's bar-chart widths are set via React's `style` prop — tightening that would need a larger refactor for a low security payoff. |
 | H4 | **Search intermittently 500s** for ordinary queries (`57014` — statement timeout). Full diagnosis below. | **Resolved** — `anon` role's `statement_timeout` raised 3s → 8s (migration `0008_raise_anon_search_timeout.sql`, must be applied by you — see below) plus a one-time retry in `searchQuestions()` on that exact error code. |
+| H5 | **Every practice page (`/ssc/[exam]/pyq/[year]/[shift]`) would 500 against a fully-migrated database.** `src/lib/data/questions.ts` selected a `topic_id` column in two functions (`getQuestionNumbersForPaper`, `getQuestionByPaperAndNumber`) that `0003_remove_topics.sql` dropped — a real Postgres `42703` (undefined_column) error on every single practice page. Pre-existing, not introduced this pass — it just never surfaced before, almost certainly because production's schema had drifted from the migration files (this exact category of gap has come up before — see the migration-0009 schema-cache notes). Found the moment the Phase 5 test project (all 9 migrations genuinely, freshly applied via the CLI) hit this code path — the first environment to actually reflect the real post-0003 schema. | **Fixed** — removed the dead `topic_id` selects and type fields (nothing anywhere ever read `.topic_id` off a result, confirmed before removing it). Safe regardless of what production's actual current schema looks like: a `select` that doesn't ask for a column errors if the column doesn't exist in the query, but never errors from a column simply being *absent from the select list*. |
 
 #### H4 diagnosis — full investigation
 
@@ -688,6 +689,40 @@ call, not something to pick for you.
 walkthrough for the *production* project (immediately above) waits
 until after Phase 5, per your instruction — nothing about this section
 changes that.
+
+### First real run against the test project — 2 more real bugs found
+
+Running `npm run test:e2e` for real (not just wiring it up) against the
+newly-seeded test project immediately surfaced two more issues, on top
+of the seed-vs-schema bug already fixed above:
+
+1. **H5 (see Findings above)** — every practice page 500'd with a real
+   Postgres `42703` (undefined_column) error. This is a genuine,
+   pre-existing application bug, unrelated to anything built this
+   session — `questions.ts` selected a `topic_id` column that
+   `0003_remove_topics.sql` dropped long ago. It never surfaced before
+   because this is the first environment with all 9 migrations
+   genuinely, freshly applied — see H5 for the full reasoning on why
+   production likely never hit this. **Fixed.**
+2. **Seed bug, self-inflicted**: the seed gave CGL 2024 Tier 1 Shift 1
+   and Tier 2 Shift 1 the same slug (`shift-1`) — `getPaperBySlug()`
+   looks papers up by exam+year+slug only (no tier), so two matching
+   rows made it error. **Fixed** (renamed to `shift-3`), and re-verified
+   against a throwaway local Postgres before re-applying to the test
+   project via the new `db:reset:test` script.
+
+Debugging this took a wrong turn worth naming honestly: my first
+instinct was to test via `curl`, which showed pages missing content
+that a real browser rendered fine — `curl` never executes the
+client-side JavaScript these pages depend on (client components,
+hydration), so it's not a reliable way to check whether this app's
+pages actually work. Switched to driving a real Playwright-controlled
+browser for the rest of the investigation, which is what surfaced the
+actual Postgres error via the page's console/RSC error payload.
+
+**Result**: `npm run test:e2e` now passes cleanly against the test
+project — 18 passed, 10 skipped (all legitimate — filters/pagination
+with no second option in this small seed, not failures), 0 failed.
 
 ---
 
