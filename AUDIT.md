@@ -359,6 +359,133 @@ becomes a real problem. If you change your mind, provide a site
 key/secret (as env vars, never pasted into chat) and it's a small,
 contained change.
 
+### Production readiness (Phase 4)
+
+Surveyed the current state first (read-only) rather than guessing what
+already existed. Findings and fixes below; three sub-items are flagged
+separately at the end because they need a decision from you.
+
+**Env validation — added, didn't exist before.** `src/lib/env.ts` +
+`src/instrumentation.ts` (Next's documented `register()` hook, called
+once per server instance before it accepts requests — confirmed against
+`node_modules/next/dist/docs/.../instrumentation.md`, since this is
+exactly the kind of API the breaking-changes note at the top of this repo
+warns about). Two schemas, not one: `NEXT_PUBLIC_*` vars are checked
+everywhere (including the Edge runtime `src/proxy.ts` runs on), while
+`SUPABASE_SERVICE_ROLE_KEY` is checked only outside the Edge runtime,
+since `proxy.ts` never reads it and a platform that scopes server-only
+vars away from Edge shouldn't fail proxy.ts over a var it doesn't touch.
+The service-role check **throws in production, only warns in
+development** — deliberately asymmetric, and found by testing, not
+assumed: your own `.env.local` has `SUPABASE_SERVICE_ROLE_KEY` present
+but **empty**, so an unconditional hard-fail would have broken `next dev`
+in your own sandbox. Verified both branches for real:
+`npm run build && npm run start` now fails loudly with exactly the
+missing-var message before serving a single request (every route 500s;
+confirmed via `curl`, then cleaned up the process); `next dev` only warns.
+**Action needed from you**: populate a real `SUPABASE_SERVICE_ROLE_KEY`
+in `.env.local` — account deletion (Phase 3) has needed it all along,
+this just makes the gap loud instead of silent. 6 unit tests added
+(`src/lib/env.test.ts`) covering both branches plus the Edge-runtime
+skip, using `vi.stubEnv` rather than a real `next start` per case.
+
+**Real Supabase CLI migrations — investigated, not done, needs your
+input.** See the flagged item below; this one's genuinely blocked on a
+decision, not just deferred.
+
+**Health endpoint — added, didn't exist before.**
+`src/app/api/health/route.ts`: does one cheap real query (`select id
+from exams limit 1` via the cookie-free public client) and returns
+`200 {status: "ok"}` or `503 {status: "error"}`, always
+`Cache-Control: no-store`. Deliberately skips the same-origin/rate-limit
+checks every other route in this app has — this one is meant to be
+polled frequently and non-interactively by uptime monitors, not browsers,
+and `/api/` is already disallowed in `robots.ts`.
+
+**Cache headers — mostly already correct, one real gap fixed.** Audited
+all 10 API routes: 8 of 10 correctly set no `Cache-Control` (mutating or
+per-user routes — attempts, bookmarks, profile/delete, profile/reset,
+questions/report, auth/signout, auth/forgot-password — caching any of
+these would be a bug, not a gap). `practice/[subject]` and
+`papers/[paperId]/practice` already had `s-maxage=300,
+stale-while-revalidate=...` from Phase 2. **`/api/search` had no
+Cache-Control and should have one** — verified `searchQuestions()` uses
+the cookie-free public client and filters only on `is_published`, so the
+response never varies by caller; added `s-maxage=60,
+stale-while-revalidate=3600` (shorter than the practice routes since new
+questions can appear between imports). This also modestly helps the
+still-open H4 resource-tier concern: common short queries are exactly the
+ones now cacheable instead of re-hitting Postgres every time.
+
+**Pagination / N+1 — audited every function in `src/lib/data/`, one real
+bug found and fixed.** Everything else was already bounded (`.limit()`/
+`.range()`) or a small reference-table read with no realistic size risk.
+The one real gap: `getBookmarkedQuestions()` (`src/lib/data/dashboard.ts`)
+took an *optional* `limit` and only applied `.limit()` conditionally —
+`/bookmarks` page called it with no limit at all, a genuinely unbounded
+fetch of a user's entire bookmark history joined across 3 tables. Fixed
+by giving it a bounded default (`limit = 500`, unconditional), mirroring
+the same "cap it, don't paginate the UI" tradeoff `getUserAttempts`
+already uses elsewhere in the same file. No other loop-issuing-N-queries
+pattern exists anywhere in the codebase — the historical N+1 bugs here
+were already fixed via migration 0009's RPCs (see H4 above).
+
+**Structured logging — added, didn't exist before.** There were exactly
+3 raw `console.warn`/`console.error` calls anywhere in `src/` (all in
+`retry.ts`) and zero logging abstraction. Added `src/lib/logger.ts` —
+JSON-line output (`{level, message, timestamp, ...fields}`) so a log
+aggregator can filter/query by field instead of grepping strings — and
+switched `retry.ts` to use it with structured fields (`label`,
+`retryDelayMs`) instead of interpolated template strings. Also wired
+Next's `onRequestError` hook (`src/instrumentation.ts`, same file
+convention as `register()` above) to log every uncaught **server** error
+through the same structured logger — this is exactly where
+`Sentry.captureException` (or equivalent) would also go if you decide to
+add a tracking service below, so it's not wasted if you do.
+
+**Error tracking — investigated, not done, needs your input.** See the
+flagged item below.
+
+**Legal pages — investigated, not done, needs your input.** See the
+flagged item below.
+
+**Backup docs — written below**, since it's pure documentation with no
+code decision attached.
+
+#### Backup / restore — what you need to know and check yourself
+
+I can't check your actual Supabase project's backup configuration or
+current plan-tier retention numbers from here, and I'd rather tell you
+exactly where to look than guess at figures that may be stale by the time
+you read this:
+
+- This project runs on Supabase's **Free tier** (established earlier,
+  during the H4 investigation — see above). Free-tier projects do **not**
+  get continuous point-in-time recovery; check Dashboard → Database →
+  Backups on your project for whatever daily/retention policy currently
+  applies to your plan, since Supabase's exact free-tier backup terms are
+  the kind of thing that changes over time and shouldn't be taken from
+  training data as current fact.
+- **`scripts/run-migrations.mjs` and `scripts/seed.mjs` have no rollback
+  support** and don't create a pre-migration backup themselves — they
+  just run each `.sql` file in `supabase/migrations/`/`supabase/seed/` in
+  order. Before running a new migration against production, taking a
+  manual snapshot yourself (Dashboard → Database → Backups → "Create a
+  backup now", if your plan offers it, or a manual `pg_dump` against
+  `SUPABASE_DB_URL`) is the actual safety net right now — there isn't a
+  more automated one in this codebase.
+- If you want a scripted `pg_dump` backup step added (e.g. a
+  `db:backup` script you run yourself before migrations), say so — small
+  and easy to add once you tell me where you'd want the dump written.
+
+#### Flagged — needs a decision from you, not built
+
+| # | Item | Why it's flagged, not built |
+|---|---|---|
+| P4-1 | **Replace `scripts/run-migrations.mjs` with real Supabase CLI migrations** (you asked for this explicitly, including marking 0001-0009 as already-applied so nothing re-runs). Investigated: `supabase/config.toml` doesn't exist (never `supabase init`'d), the CLI has never been `supabase link`'d to your project (no linked project ref), and the 9 existing migration files are named `NNNN_name.sql`, not the CLI's `<14-digit-timestamp>_name.sql` convention. `supabase init` itself is safe (purely local scaffolding, no network/DB call) and I'm comfortable doing that part myself — but making the CLI *recognize* migrations 0001-0009 as already-applied requires `supabase link` (needs **your** Supabase account — it's an interactive/token-based login I don't have) and then `supabase migration repair <version> --status applied` for each one, which is a **write to the remote project's migration ledger table**, exactly the kind of DB write the rules for this pass say must be run by you, not me. | Needs your account (CLI login/link) + you to run the repair commands yourself. I can prepare everything short of that (init, proposed renamed filenames preserving order, the exact repair commands to paste) if you want to proceed. |
+| P4-2 | **Error tracking service.** No Sentry/Bugsnag/equivalent is installed. `onRequestError` (above) already gives you structured server-error logs either way, but a real tracking service adds alerting, stack traces with source maps, and issue grouping. | Needs a decision on which service (Sentry is the common default for Next.js and has a first-party SDK) and **your** account/DSN for it — a paid-service signup, not something to pick for you. |
+| P4-3 | **Legal pages** (`/privacy`, `/terms` — neither exists; nothing links to them from `Footer.tsx` either). I can build the routes, metadata, and footer links, but the actual policy *text* is a legal/product decision — generating placeholder legal text and shipping it as if reviewed would be worse than not having the pages at all. | Tell me how you want to handle the content: you provide the text, you want a clearly-marked draft/placeholder to replace before launch, or you already have text hosted elsewhere to link to instead. |
+
 ---
 
 ## Already solid — verified, not touched
@@ -460,5 +587,27 @@ Lighthouse scores. See the manual checklist below.
    you ever add Google Analytics/GTM/an ad script, it needs to read the
    nonce from `headers()` and pass it explicitly (pattern is in
    `node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`).
-9. **No environment variables need to change** — `.env.example` already
-   matches what the app reads; nothing in this pass added new config.
+9. ~~No environment variables need to change~~ — **update**: still true
+   that no *new* variable names were added, but `SUPABASE_SERVICE_ROLE_KEY`
+   is now enforced as required in production (`src/instrumentation.ts`).
+   Which leads directly to the next item.
+10. **Set a real `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`** — it's
+    currently present but empty in your local file. Account deletion
+    (Phase 3) has needed a working value all along; the new env
+    validation (Phase 4) just makes a missing one fail loudly at boot
+    instead of silently at the moment someone deletes their account.
+11. **Decide how to handle real Supabase CLI migrations (P4-1)** — needs
+    your account (`supabase link`) and you to run the ledger-repair
+    commands yourself; see "Production readiness (Phase 4)" above for
+    exactly why and what's already prepared.
+12. **Decide on an error-tracking service (P4-2)** — Sentry or otherwise;
+    needs your account/DSN. `onRequestError` is already wired to a
+    structured logger either way, so this isn't blocking anything, just
+    better observability if you want it.
+13. **Decide on legal pages content (P4-3)** — `/privacy` and `/terms`
+    don't exist yet. Tell me whether you'll supply the text, want a
+    clearly-marked placeholder to replace before launch, or already have
+    pages hosted elsewhere to link to.
+14. **Check your Supabase plan's actual backup/retention policy** —
+    Dashboard → Database → Backups. See "Backup / restore" above for why
+    I didn't just state a number.
