@@ -2,11 +2,21 @@ import { test, expect } from "@playwright/test";
 import { deleteTestUser, findTestUserIdByEmail, testUserEmail } from "./fixtures/test-user";
 
 // Drives the real signup form end to end. Confirm-email is off on the
-// test project (see AUDIT.md Phase 5), so signUp() issues a session
-// immediately - matches SignupForm.tsx's data.session branch, not the
-// "check your email" one.
+// test project, so signUp() issues a session immediately - matches
+// SignupForm.tsx's data.session branch, not the "check your email" one.
+// That said, GoTrue still appears to generate/send the confirmation
+// email regardless of whether clicking it is *enforced* before login
+// (confirmed by observed behavior, not documented explicitly anywhere) -
+// and Supabase's built-in mailer is hard-capped at 2 messages/hour, a
+// limit that cannot be raised via the dashboard's Rate Limits page at
+// all while using it (only custom SMTP raises it - see AUDIT.md Phase 5
+// / LAUNCH_CHECKLIST.md). So this test skips gracefully rather than
+// fails when it hits that cap, and only runs on one browser project -
+// no reason to spend two of a two-per-hour budget on the same check.
 test.describe("Signup", () => {
-  test("creates an account and lands on the dashboard", async ({ page }) => {
+  test("creates an account and lands on the dashboard", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "Desktop Chrome", "Email-sending test only needs to run once per suite.");
+
     const email = testUserEmail("signup");
     const name = "E2E Test User";
 
@@ -17,7 +27,22 @@ test.describe("Signup", () => {
     await page.getByLabel("Confirm password").fill("Test-password-1");
     await page.getByRole("button", { name: "Create account" }).click();
 
-    await page.waitForURL("**/dashboard");
+    const outcome = await Promise.race([
+      page.waitForURL("**/dashboard", { timeout: 10_000 }).then(() => "dashboard" as const),
+      page
+        .getByText(/rate limit exceeded/i)
+        .waitFor({ timeout: 10_000 })
+        .then(() => "rate-limited" as const),
+    ]).catch(() => "timeout" as const);
+
+    if (outcome === "rate-limited") {
+      test.skip(
+        true,
+        "Supabase's built-in mailer hit its 2-emails/hour cap - not a real failure, and not fixable by retrying. See LAUNCH_CHECKLIST.md for the custom-SMTP fix.",
+      );
+    }
+
+    expect(outcome).toBe("dashboard");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
 
     const userId = await findTestUserIdByEmail(email);
