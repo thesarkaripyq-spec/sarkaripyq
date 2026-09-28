@@ -24,6 +24,10 @@ import { defineConfig, devices } from "@playwright/test";
 // NODE_ENV=test just as much as this start step does.
 export default defineConfig({
   testDir: "./e2e",
+  // Runs before any test (and before webServer's NEXT_PUBLIC_* values
+  // matter to a real browser) - refuses to proceed unless .env.test
+  // points at the dedicated test project, never production.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   // Capped from Playwright's full-parallelism default: running against
   // the real (Free-tier) Supabase project caused one real, reproducible
