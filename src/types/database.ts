@@ -43,7 +43,6 @@ export interface QuestionListItem {
   id: string;
   paper_id: string;
   subject_id: string;
-  topic_id: string | null;
   question_number: number;
 }
 
@@ -51,7 +50,6 @@ export interface QuestionDetail {
   id: string;
   paper_id: string;
   subject_id: string;
-  topic_id: string | null;
   question_number: number;
   question_html: string;
   image_url: string | null;

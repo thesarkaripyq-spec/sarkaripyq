@@ -6,7 +6,6 @@ interface QuestionRow {
   id: string;
   paper_id: string;
   subject_id: string;
-  topic_id: string | null;
   question_number: number;
   question_html: string;
   image_url: string | null;
@@ -21,7 +20,7 @@ export async function getQuestionNumbersForPaper(
   const supabase = createPublicClient();
   let query = supabase
     .from("questions")
-    .select("id, paper_id, subject_id, topic_id, question_number")
+    .select("id, paper_id, subject_id, question_number")
     .eq("paper_id", paperId)
     .eq("is_published", true)
     .order("question_number", { ascending: true });
@@ -46,7 +45,7 @@ export async function getQuestionByPaperAndNumber(
       supabase
         .from("questions")
         .select(
-          "id, paper_id, subject_id, topic_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
+          "id, paper_id, subject_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
         )
         .eq("paper_id", paperId)
         .eq("question_number", questionNumber)
