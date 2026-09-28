@@ -616,13 +616,7 @@ this is a two-part install, not one.
 
 1. Create a new project at supabase.com — free tier, entirely separate
    from your production project, its own billing/usage.
-2. Apply the schema to it: run `scripts/run-migrations.mjs` against
-   *this new project's* `SUPABASE_DB_URL` (the existing custom script,
-   not the CLI — deliberately not entangling this with the production
-   CLI-adoption decision above, which is a separate, already-deferred
-   question). Seed it the same way via `scripts/seed.mjs`.
-3. Get the new project's URL, anon key, service-role key, and DB URL
-   from *its own* dashboard → `.env.test`.
+2. Apply the schema to it, seed it, and get its URL/keys into `.env.test`.
 
 **My read**: Option B is meaningfully less friction on this machine
 right now — no restart, no elevated install, nothing that touches
@@ -631,6 +625,64 @@ isolation (no network dependency, resets instantly via `supabase db
 reset`). Both satisfy the actual requirement (never touching the
 production project); which one is worth the setup cost is yours to
 call, not something to pick for you.
+
+**Decided (2026-09-28): Option B**, and executed:
+
+- Test project ref **`gadeobjbzjnpuvwvbrdq`**. `.env.test` is filled in
+  (its URL, publishable/anon key, and service-role key); confirmed via
+  `dotenv` that all 6 expected keys are present (values were never
+  printed anywhere, only the key *names*).
+- **Migrations, via the CLI** (your instruction, not the script — this
+  supersedes step 2 above): because this is a genuinely fresh project
+  with zero prior migration history (never touched by any tool before),
+  `supabase db push` needs no `repair` step at all — that complexity is
+  specific to the *production* project's adoption (immediately above),
+  where migrations were already applied by the old script outside the
+  CLI's ledger. This project has no such mismatch to reconcile.
+- **You run these yourself**, in this repo's root, so you're the one
+  typing the database password at each prompt — I did not run `link`
+  or `db push` myself, since either would need that password and you
+  asked to enter it yourself:
+  ```
+  supabase link --project-ref gadeobjbzjnpuvwvbrdq
+  supabase db push
+  ```
+  Then, read-only, to confirm: `supabase migration list` should show
+  all 9 local migrations as applied, matching remote, nothing pending.
+- **Seed data**: fixed a real bug found while building this — the
+  existing `supabase/seed/0001_sample_data.sql` referenced a `topics`
+  table and a `questions.topic_id` column that
+  `0003_remove_topics.sql` had already dropped; it would have failed
+  outright against the current schema, and nobody had re-run it since.
+  Rewrote it as a small, realistic catalog (2 exams — tiered CGL,
+  untiered GD — 5 papers across 2 years and both tiers, 14 questions
+  across all 4 subjects, 56 options) and **actually applied it**, not
+  just read it, against a throwaway local Postgres running all 9 real
+  migrations plus a minimal `auth.users`/`auth.uid()`/`anon`-role stub
+  (same approach as the earlier H4 RLS testing) — confirmed the
+  `question_count` trigger syncs correctly, every question has exactly
+  one correct option and 4 options total, full-text search matches
+  real content, and the Phase 1 catalog RPCs return correct results as
+  `anon`. User-owned data (bookmarks/attempts/profiles) is deliberately
+  **not** in this file — tests create that themselves at runtime via
+  the admin API, since faking rows in `auth.users` via raw SQL would
+  bypass GoTrue entirely (no password hashing, no identities row).
+  After `db push` succeeds, seed it with:
+  ```
+  npm run db:seed:test
+  ```
+  (`scripts/seed.mjs` now accepts an optional env-file argument —
+  defaults to `.env.local`, unchanged, so nothing about normal local
+  dev seeding changed.)
+- **Guard added**: `e2e/global-setup.ts`, wired as Playwright's
+  `globalSetup`, refuses to run any test unless `NODE_ENV=test` *and*
+  `.env.test`'s `NEXT_PUBLIC_SUPABASE_URL` contains
+  `gadeobjbzjnpuvwvbrdq`. Worth knowing exactly what this does and
+  doesn't guard: it runs in Playwright's own Node process, which — unlike
+  the `next build`/`next start` child processes it spawns — has no
+  built-in `.env.test` loading of its own, so the guard loads the file
+  itself via `dotenv` rather than assuming the value is already in
+  `process.env`. Caught this before it became a silent no-op, not after.
 
 **Deferred at your request**: the `supabase link` + `migration repair`
 walkthrough for the *production* project (immediately above) waits
@@ -742,23 +794,30 @@ Lighthouse scores. See the manual checklist below.
    that no *new* variable names were added, but `SUPABASE_SERVICE_ROLE_KEY`
    is now enforced as required in production (`src/instrumentation.ts`).
    Which leads directly to the next item.
-10. **Set a real `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`** — it's
-    currently present but empty in your local file. Account deletion
-    (Phase 3) has needed a working value all along; the new env
-    validation (Phase 4) just makes a missing one fail loudly at boot
-    instead of silently at the moment someone deletes their account.
-11. **Decide how to handle real Supabase CLI migrations (P4-1)** — needs
-    your account (`supabase link`) and you to run the ledger-repair
-    commands yourself; see "Production readiness (Phase 4)" above for
-    exactly why and what's already prepared.
-12. **Decide on an error-tracking service (P4-2)** — Sentry or otherwise;
-    needs your account/DSN. `onRequestError` is already wired to a
-    structured logger either way, so this isn't blocking anything, just
-    better observability if you want it.
-13. **Decide on legal pages content (P4-3)** — `/privacy` and `/terms`
-    don't exist yet. Tell me whether you'll supply the text, want a
-    clearly-marked placeholder to replace before launch, or already have
-    pages hosted elsewhere to link to.
+10. ~~Set a real `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`~~ — **done**,
+    confirmed 2026-09-28. Postgres version also confirmed (17.6) — matches
+    `supabase/config.toml`'s default, no edit needed.
+11. **Production CLI migration adoption (P4-1) — deferred at your
+    request**, walkthrough happens after Phase 5. Not forgotten; see
+    "adopting the Supabase CLI for migrations" above for exactly what's
+    already prepared and what's left.
+12. ~~Decide on an error-tracking service (P4-2)~~ — **done**: skipped
+    for now.
+13. ~~Decide on legal pages content (P4-3)~~ — **done**: placeholder
+    pages built at `/privacy` and `/terms`, linked from the footer,
+    noindexed until you replace the content.
 14. **Check your Supabase plan's actual backup/retention policy** —
     Dashboard → Database → Backups. See "Backup / restore" above for why
-    I didn't just state a number.
+    I didn't just state a number. Still open.
+15. **Run these yourself against the test project** (`gadeobjbzjnpuvwvbrdq`)
+    — I didn't run them, since you asked to type the database password
+    yourself:
+    ```
+    supabase link --project-ref gadeobjbzjnpuvwvbrdq
+    supabase db push
+    npm run db:seed:test
+    ```
+    Then `supabase migration list` (read-only) to confirm all 9 show
+    applied with nothing pending. See "Testing (Phase 5)" above for the
+    full reasoning, including a real bug found and fixed in the seed
+    data (a dropped `topics` table it still referenced).
