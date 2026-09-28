@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { SubjectTabs } from "@/components/exam/SubjectTabs";
 import { QuestionPractice } from "@/components/question/QuestionPractice";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SearchParamsBridge } from "@/components/ui/SearchParamsBridge";
 import type { QuestionDetail, Subject } from "@/types/database";
 
 interface PracticeState {
@@ -13,25 +13,6 @@ interface PracticeState {
   questionNumbers: number[];
   currentQuestionNumber: number | null;
   question: QuestionDetail | null;
-}
-
-// Isolated so ONLY this tiny, invisible piece is subject to the
-// Suspense-deferred-to-client behavior useSearchParams requires on a
-// statically rendered page - the bulk of the UI (SubjectTabs,
-// QuestionPractice) renders immediately from server-provided props below,
-// not gated behind this boundary. Reactive to back/forward navigation too,
-// since useSearchParams tracks all URL changes, not just pushes this page
-// makes itself.
-function ParamsWatcher({ onChange }: { onChange: (subject: string | null, q: string | null) => void }) {
-  const searchParams = useSearchParams();
-  const subject = searchParams.get("subject");
-  const q = searchParams.get("q");
-
-  useEffect(() => {
-    onChange(subject, q);
-  }, [subject, q, onChange]);
-
-  return null;
 }
 
 export function PracticeSession({
@@ -69,7 +50,9 @@ export function PracticeSession({
   const currentKeyRef = useRef(`${initialSubjectSlug ?? ""}:${initialCurrentQuestionNumber ?? ""}`);
 
   const handleParamsChange = useCallback(
-    (subjectSlug: string | null, qParam: string | null) => {
+    (params: URLSearchParams) => {
+      const subjectSlug = params.get("subject");
+      const qParam = params.get("q");
       const key = `${subjectSlug ?? ""}:${qParam ?? ""}`;
       if (key === currentKeyRef.current) return;
       currentKeyRef.current = key;
@@ -100,7 +83,7 @@ export function PracticeSession({
   return (
     <>
       <Suspense fallback={null}>
-        <ParamsWatcher onChange={handleParamsChange} />
+        <SearchParamsBridge onChange={handleParamsChange} />
       </Suspense>
 
       <div className="relative">
