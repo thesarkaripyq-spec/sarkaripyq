@@ -724,6 +724,56 @@ actual Postgres error via the page's console/RSC error payload.
 project — 18 passed, 10 skipped (all legitimate — filters/pagination
 with no second option in this small seed, not failures), 0 failed.
 
+### Auth e2e coverage — login done, signup blocked on a dashboard setting
+
+With test data isolation actually proven (above), the auth flows built
+in Phase 3 have a safe place to run for the first time. Added
+`e2e/fixtures/test-user.ts` (create/delete real auth users via the
+admin API, deliberately not through the UI, so tests that only need a
+*logged-in* user don't also depend on signup working) and two specs.
+
+**Login (`e2e/auth-login.spec.ts`) — fully green.** Correct credentials
+land on the dashboard; the wrong password shows "Invalid login
+credentials" and stays on `/login` — checked what GoTrue actually
+returns before asserting on it, not guessed.
+
+**Signup (`e2e/auth-signup.spec.ts`) — one real bug found and fixed,
+one real infrastructure limit found and not worked around.**
+
+1. The client-side "passwords don't match" validation (no network
+   call) is fully green.
+2. The happy-path test (real `signUp()` through the actual form)
+   surfaced two distinct, sequential issues, each confirmed by actually
+   calling the endpoints involved, not inferred:
+   - **Fixed**: generated test emails used `@sarkaripyq-test.invalid`
+     (RFC 2606-reserved, same reasoning as everywhere else in this
+     project). GoTrue's public `signUp()` rejects that domain outright
+     ("email address is invalid") even though `admin.createUser()`
+     tolerates it — the admin and public endpoints validate
+     differently. Switched to `@example.com` (also RFC 2606-reserved,
+     but a real, resolving, non-mail-accepting domain, so it passes
+     format validation everywhere) and confirmed the rejection is gone.
+   - **Not fixed here, needs your dashboard**: with that resolved, the
+     same test now hits `"email rate limit exceeded"` — a genuine
+     Supabase Auth rate limit on the test project, most likely
+     exhausted by this session's own iterative testing (this signup
+     test, my diagnostic probes, and earlier `forgot-password` testing
+     likely all share the same hourly email-sending quota). Confirmed
+     by re-running after the domain fix and seeing the *same* rate-limit
+     message consistently, not the fixed "invalid" one — this is a
+     configuration ceiling, not a flaky retry-and-it'll-pass situation,
+     so retrying blindly would just burn more of the same quota.
+3. **Not attempted, out of caution**: bookmarks/attempts/
+   account-deletion e2e coverage, since those also create real
+   auth-adjacent state and I wanted this rate-limit question resolved
+   (or at least clearly handed to you) before generating more signups.
+
+**What you need to do**: Dashboard → Authentication → Rate Limits on
+the **test project** (`gadeobjbzjnpuvwvbrdq`, not production) — raise
+whatever governs sign-up/email-sending, or just wait for the hourly
+window to reset, then re-run `npm run test:e2e`. The test itself is
+correct; it's blocked on this setting, not on anything code can fix.
+
 ---
 
 ## Already solid — verified, not touched
@@ -844,15 +894,12 @@ Lighthouse scores. See the manual checklist below.
 14. **Check your Supabase plan's actual backup/retention policy** —
     Dashboard → Database → Backups. See "Backup / restore" above for why
     I didn't just state a number. Still open.
-15. **Run these yourself against the test project** (`gadeobjbzjnpuvwvbrdq`)
-    — I didn't run them, since you asked to type the database password
-    yourself:
-    ```
-    supabase link --project-ref gadeobjbzjnpuvwvbrdq
-    supabase db push
-    npm run db:seed:test
-    ```
-    Then `supabase migration list` (read-only) to confirm all 9 show
-    applied with nothing pending. See "Testing (Phase 5)" above for the
-    full reasoning, including a real bug found and fixed in the seed
-    data (a dropped `topics` table it still referenced).
+15. ~~Run these yourself against the test project~~ — **done**, confirmed
+    2026-09-28: `supabase link`, `db push`, `db:seed:test`, and
+    `migration list` all ran; all 9 migrations show applied.
+16. **Raise (or wait out) the test project's email-sending rate limit** —
+    Dashboard → Authentication → Rate Limits on the **test project**
+    (`gadeobjbzjnpuvwvbrdq`, not production). Blocking the signup e2e
+    test's happy path right now; see "Auth e2e coverage" above for the
+    full diagnosis. Ping me once it's raised (or an hour's passed) and
+    I'll confirm the suite goes fully green.
