@@ -6,6 +6,11 @@ dist
 .env
 .env.local
 .env*.local
+# Unlike Next's own convention (.env.test committed, .env.test.local
+# gitignored), this repo's .env.test holds real credentials for whichever
+# backend Phase 5 tests run against (local Supabase or a separate test
+# project) - treated exactly like .env.local, never committed.
+.env.test
 *.tsbuildinfo
 .DS_Store
 npm-debug.log*
