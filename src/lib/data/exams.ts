@@ -56,6 +56,21 @@ export async function getYearsForExam(examId: string, tier?: string): Promise<nu
   return [...new Set((data ?? []).map((r) => r.year as number))];
 }
 
+// Every (year, tier) pair for an exam, unfiltered - lets the years-list
+// page render statically/ISR (see AUDIT.md A1/Phase 2) and filter by tier
+// entirely client-side over this one prefetched list, instead of needing
+// a fresh server round-trip per tier selection.
+export async function getYearsAndTiersForExam(examId: string): Promise<{ year: number; tier: string }[]> {
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(
+    () => supabase.from("papers").select("year, tier").eq("exam_id", examId).eq("is_published", true),
+    "exams.getYearsAndTiersForExam",
+  );
+
+  if (error) throw error;
+  return (data ?? []) as { year: number; tier: string }[];
+}
+
 export async function getPapersForExamYear(examId: string, year: number, tier?: string): Promise<Paper[]> {
   const supabase = createPublicClient();
   let query = supabase

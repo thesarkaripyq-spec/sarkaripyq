@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ChevronRight, Clock3 } from "lucide-react";
+import { Suspense } from "react";
+import { Clock3 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getExamTiers, getPapersForExamYear } from "@/lib/data/exams";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/layout/PageHero";
-import { TierToggle } from "@/components/exam/TierToggle";
-import { formatExamDate, siteUrl } from "@/lib/utils";
+import { PapersFilter } from "@/components/exam/PapersFilter";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { siteUrl } from "@/lib/utils";
 import { safeJsonLd } from "@/lib/json-ld";
 
 export const revalidate = 300;
 
 interface Props {
   params: Promise<{ exam: string; year: string }>;
-  searchParams: Promise<{ tier?: string }>;
+}
+
+// Empty on purpose - see src/app/ssc/[exam]/page.tsx for why this alone
+// (zero build-time queries) is enough to unlock on-demand ISR caching for
+// every exam+year combination, verified via Cache-Control headers.
+export async function generateStaticParams() {
+  return [];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -28,21 +34,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ExamPyqYearPage({ params, searchParams }: Props) {
+export default async function ExamPyqYearPage({ params }: Props) {
   const { exam: examSlug, year } = await params;
-  const { tier } = await searchParams;
   const yearNum = Number(year);
   const exam = await getExamBySlug(examSlug);
   if (!exam || !Number.isInteger(yearNum)) notFound();
 
+  const basePath = `/ssc/${exam.slug}/pyq/${year}`;
+  // Unfiltered - the tier filter is applied client-side (PapersFilter), so
+  // this 404 check now unconditionally reflects "no papers at all for this
+  // year," with no tier-dependent special case needed.
   const [papers, tiers] = await Promise.all([
-    getPapersForExamYear(exam.id, yearNum, tier),
+    getPapersForExamYear(exam.id, yearNum),
     getExamTiers(exam.id),
   ]);
-  // Only 404 when the year itself has nothing published — a tier filter
-  // that happens to match zero papers for an otherwise-valid year should
-  // fall through to the empty state below, not a hard 404.
-  if (papers.length === 0 && !tier) notFound();
+  if (papers.length === 0) notFound();
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -67,38 +73,19 @@ export default async function ExamPyqYearPage({ params, searchParams }: Props) {
         title={`${exam.name} ${year} PYQ`}
         description="Select a shift to start practicing."
       />
-      <TierToggle tiers={tiers} activeTier={tier ?? null} basePath={`/ssc/${exam.slug}/pyq/${year}`} />
-      <div className="mx-auto max-w-content px-4 py-8">
-        <div className="space-y-2.5">
-          {papers.length === 0 ? (
-            <EmptyState title="No shifts published for this year yet" />
-          ) : (
-            papers.map((paper) => (
-              <Link
-                key={paper.id}
-                href={`/ssc/${exam.slug}/pyq/${year}/${paper.slug}`}
-                className="group flex items-center justify-between rounded-lg border border-ink-100 px-4 py-3.5 transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-card"
-              >
-                <div>
-                  <p className="font-semibold text-ink-900">
-                    {paper.tier ? `${paper.tier} — ` : ""}
-                    {paper.shift ?? "Shift"}
-                  </p>
-                  {paper.exam_date ? (
-                    <p className="text-sm text-ink-500">{formatExamDate(paper.exam_date)}</p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-ink-50 px-2 py-0.5 text-xs font-medium text-ink-500">
-                    {paper.question_count} Qs
-                  </span>
-                  <ChevronRight size={16} className="text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-500" aria-hidden />
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-      </div>
+      <Suspense
+        fallback={
+          <div className="mx-auto max-w-content px-4 py-8">
+            <div className="space-y-2.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-16" />
+              ))}
+            </div>
+          </div>
+        }
+      >
+        <PapersFilter basePath={basePath} papers={papers} tiers={tiers} />
+      </Suspense>
     </div>
   );
 }

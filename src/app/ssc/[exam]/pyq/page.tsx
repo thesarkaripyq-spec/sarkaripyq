@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Suspense } from "react";
 import { CalendarDays } from "lucide-react";
 import { notFound } from "next/navigation";
-import { getExamBySlug, getExamTiers, getYearsForExam } from "@/lib/data/exams";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { getExamBySlug, getYearsAndTiersForExam } from "@/lib/data/exams";
 import { PageHero } from "@/components/layout/PageHero";
-import { TierToggle } from "@/components/exam/TierToggle";
+import { YearsFilter } from "@/components/exam/YearsFilter";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { siteUrl } from "@/lib/utils";
 import { safeJsonLd } from "@/lib/json-ld";
 
@@ -13,7 +13,13 @@ export const revalidate = 300;
 
 interface Props {
   params: Promise<{ exam: string }>;
-  searchParams: Promise<{ tier?: string }>;
+}
+
+// Empty on purpose - see src/app/ssc/[exam]/page.tsx for why this alone
+// (zero build-time queries) is enough to unlock on-demand ISR caching for
+// every exam slug, verified via Cache-Control headers.
+export async function generateStaticParams() {
+  return [];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -28,19 +34,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ExamPyqYearsPage({ params, searchParams }: Props) {
+export default async function ExamPyqYearsPage({ params }: Props) {
   const { exam: examSlug } = await params;
-  const { tier } = await searchParams;
   const exam = await getExamBySlug(examSlug);
   if (!exam) notFound();
 
-  const [years, tiers] = await Promise.all([
-    getYearsForExam(exam.id, tier),
-    getExamTiers(exam.id),
-  ]);
-
-  const yearHref = (year: number) =>
-    `/ssc/${exam.slug}/pyq/${year}${tier ? `?tier=${encodeURIComponent(tier)}` : ""}`;
+  const basePath = `/ssc/${exam.slug}/pyq`;
+  const yearsWithTiers = await getYearsAndTiersForExam(exam.id);
+  const tiers = [...new Set(yearsWithTiers.map((r) => r.tier))].filter(Boolean);
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -64,24 +65,19 @@ export default async function ExamPyqYearsPage({ params, searchParams }: Props) 
         title={`${exam.name} PYQ — All Years`}
         description="Select a year to view available shifts."
       />
-      <TierToggle tiers={tiers} activeTier={tier ?? null} basePath={`/ssc/${exam.slug}/pyq`} />
-      <div className="mx-auto max-w-content px-4 py-8">
-        {years.length === 0 ? (
-          <EmptyState title="No papers published yet" description="Check back soon." />
-        ) : (
-          <div className="flex flex-wrap gap-2.5">
-            {years.map((year) => (
-              <Link
-                key={year}
-                href={yearHref(year)}
-                className="rounded-lg border border-ink-100 px-4 py-2.5 text-sm font-semibold text-ink-900 transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-card"
-              >
-                {year}
-              </Link>
-            ))}
+      <Suspense
+        fallback={
+          <div className="mx-auto max-w-content px-4 py-8">
+            <div className="flex flex-wrap gap-2.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-20" />
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        }
+      >
+        <YearsFilter basePath={basePath} yearsWithTiers={yearsWithTiers} tiers={tiers} />
+      </Suspense>
     </div>
   );
 }

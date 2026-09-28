@@ -15,14 +15,20 @@ interface Props {
   params: Promise<{ exam: string }>;
 }
 
-// Deliberately no generateStaticParams here: pre-rendering every exam
-// concurrently at build time was tried and concretely failed a build (see
-// AUDIT.md H4/Phase 2) - prerendering "/ssc/gd" hit the same 57014
-// statement-timeout as H4, because a burst of concurrent build-time
-// queries is exactly the kind of load this project's Free-tier compute
-// struggles with. Rendering on first real request and letting ISR cache
-// it from there spreads that load out naturally instead of concentrating
-// it into one risky build-time burst.
+// Verified empirically (production build + curl): a dynamic-segment route
+// with NO generateStaticParams at all renders fully dynamic on every
+// request, even with zero cookies()/headers()/searchParams usage -
+// dynamicParams:true only kicks in the ISR/fallback caching model for
+// params *outside* a route that has opted into static generation via
+// generateStaticParams in the first place. An EMPTY array is enough: zero
+// build-time queries (avoiding the concurrent-load build failure from
+// pre-rendering every exam - see AUDIT.md H4), but it still unlocks
+// on-demand render-once-then-cache for every param, confirmed via
+// Cache-Control: s-maxage=300 on first request and a ~10ms cached response
+// on the second.
+export async function generateStaticParams() {
+  return [];
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { exam: examSlug } = await params;
