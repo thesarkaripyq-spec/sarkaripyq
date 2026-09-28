@@ -196,17 +196,19 @@ export interface BookmarkedQuestion {
   paper: { year: number; slug: string };
 }
 
-export async function getBookmarkedQuestions(userId: string, limit?: number): Promise<BookmarkedQuestion[]> {
+// `limit` defaults to a generous-but-bounded cap rather than being left
+// optional - the /bookmarks page calls this with no limit at all, which
+// was a genuinely unbounded fetch of a user's entire bookmark history.
+export async function getBookmarkedQuestions(userId: string, limit = 500): Promise<BookmarkedQuestion[]> {
   const supabase = await createClient();
-  let query = supabase
+  const query = supabase
     .from("bookmarks")
     .select(
       "id, created_at, question_id, questions!inner(question_number, question_html, papers!inner(year, slug, exams!inner(slug, name)))",
     )
     .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  if (limit) query = query.limit(limit);
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   const { data, error } = await query.returns<
     {
