@@ -13,7 +13,8 @@
     "test:e2e": "cross-env NODE_ENV=test next build && cross-env NODE_ENV=test playwright test",
     "db:migrate": "node scripts/run-migrations.mjs",
     "db:seed": "node scripts/seed.mjs",
-    "db:seed:test": "node scripts/seed.mjs .env.test"
+    "db:seed:test": "node scripts/seed.mjs .env.test",
+    "db:reset:test": "node scripts/reset-test-db.mjs && npm run db:seed:test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
