@@ -5,8 +5,10 @@ import { siteUrl } from "@/lib/utils";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicClient();
 
-  // /search is intentionally excluded: it's noindex'd in its own metadata,
-  // so listing it here would contradict that directive.
+  // /search, /privacy, /terms are intentionally excluded: all three are
+  // noindex'd in their own metadata (the latter two only until their
+  // placeholder content is replaced with real policy text - see AUDIT.md),
+  // so listing them here would contradict that directive.
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: siteUrl, changeFrequency: "daily", priority: 1 },
     { url: `${siteUrl}/ssc`, changeFrequency: "weekly", priority: 0.9 },

@@ -20,6 +20,15 @@ export function Footer() {
             Search
           </Link>
         </nav>
+        <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-ink-500">
+          <Link href="/privacy" className="transition-colors hover:text-white">
+            Privacy Policy
+          </Link>
+          <Link href="/terms" className="transition-colors hover:text-white">
+            Terms of Service
+          </Link>
+        </nav>
+
         <p className="mt-2 text-xs text-ink-500">
           &copy; {new Date().getFullYear()} SarkariPYQ. Not affiliated with SSC or the Government of India.
         </p>
