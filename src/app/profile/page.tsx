@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHero } from "@/components/layout/PageHero";
 import { ResetProgressButton } from "@/components/auth/ResetProgressButton";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { DeleteAccountButton } from "@/components/auth/DeleteAccountButton";
 
 export const metadata: Metadata = {
   title: "Profile",
@@ -40,6 +41,14 @@ export default async function ProfilePage() {
 
         <div className="mt-6 max-w-md">
           <SignOutButton />
+        </div>
+
+        <div className="mt-6 max-w-md rounded-lg border border-danger-500/30 p-5">
+          <p className="font-semibold text-ink-900">Delete account</p>
+          <p className="mt-1 text-sm text-ink-500">
+            Permanently deletes your account, bookmarks and practice history. This cannot be undone.
+          </p>
+          <DeleteAccountButton />
         </div>
       </div>
     </div>
