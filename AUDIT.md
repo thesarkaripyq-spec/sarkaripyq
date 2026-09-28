@@ -353,9 +353,11 @@ create a Turnstile site, and the widget is a third-party script that
 would need to be added to the CSP's `script-src` on `/login`, `/signup`,
 and `/forgot-password` specifically. Not built because: (a) it needs
 credentials only you can create, and (b) whether it's worth the extra
-CSP surface area is a product call, not something to guess at. If you
-want it, say so and provide the site key/secret (as env vars, never
-pasted into chat) and I'll wire it up — small, contained change.
+CSP surface area is a product call, not something to guess at.
+**Decision (2026-09-28): skip for now** — revisit if login/signup abuse
+becomes a real problem. If you change your mind, provide a site
+key/secret (as env vars, never pasted into chat) and it's a small,
+contained change.
 
 ---
 
