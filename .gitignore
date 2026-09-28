@@ -22,3 +22,6 @@ __pycache__/
 # of the app, regenerable, not meant to be tracked.
 .tmp-*
 .verify-*.json
+
+# Supabase CLI's local cache (version check, etc.) - not project content.
+supabase/.temp/

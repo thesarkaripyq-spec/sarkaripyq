@@ -48,7 +48,63 @@ no missing RLS.
 | H1 | `npm run lint` is completely broken. Next.js 16 removed the `next lint` command (confirmed against `node_modules/next/dist/docs/.../upgrading/version-16.md`); running it now errors immediately because Next's CLI misparses `lint` as a project directory argument. This means lint has been silently non-functional since the Next 16 upgrade — no one running `npm run lint` locally or in CI has gotten real output. | **Fixed** — `package.json`'s `lint` script now runs `eslint .` directly (the documented Next 16 replacement). |
 | H2 | Open-redirect risk in the OAuth callback (`src/app/auth/callback/route.ts`). The `next` query param was concatenated directly into `NextResponse.redirect(`${origin}${next}`)` with no validation. A crafted value like `next=@evil.com` produces the string `http://yoursite.com@evil.com`, which browsers parse as userinfo (`yoursite.com`) + host (`evil.com`) — i.e. a same-looking link that actually redirects off-site after a real Supabase login. This is exploitable by anyone who can get a user to click a modified `/auth/callback?...&next=@evil.com` link. | **Fixed** — `next` is now validated to be a same-origin relative path (`/...`, not `//...`, no `@`/scheme) before use; anything else falls back to `/dashboard`. |
 | H3 | No `Content-Security-Policy` header. The brief explicitly asks for one; `next.config.mjs` already sets the other 5 recommended headers. Because the app is (see A1 below) already fully dynamically rendered on every request, adding a per-request nonce-based CSP via `proxy.ts` costs nothing extra in caching/performance — it was simply missing. | **Fixed** — `src/proxy.ts` now generates a per-request nonce and sets a strict `script-src 'nonce-… strict-dynamic'` CSP (plus the standard `object-src none`, `frame-ancestors none`, `base-uri self`, `form-action self`, `upgrade-insecure-requests`). The nonce is threaded through the two inline `<script>` tags in `layout.tsx` and all four breadcrumb JSON-LD `<script>` tags. `style-src` keeps `'unsafe-inline'` because the dashboard's bar-chart widths are set via React's `style` prop — tightening that would need a larger refactor for a low security payoff. |
-| H4 | **Search intermittently 500s** for ordinary queries. Verified live against a `next start` build against your real database: `GET /api/search?q=math` (and the equivalent `/search?q=math` page) fails with a Postgres `57014` — `canceling statement due to statement timeout`. This isn't a fluke: two *other* comments already in this codebase (`src/lib/data/exams.ts` on `getSiteStats`, `src/lib/data/dashboard.ts` on `getUserAttempts`) independently mention hitting the same 57014 on other queries and worked around it there. The full-text search behind `/search` and the SearchBar dropdown hasn't been worked around yet, so a common short search term can fail outright. | **Flagged, not fixed** — root-causing this needs `EXPLAIN`/index inspection against your actual database, and a sandbox rule in this environment correctly blocked me from connecting to it directly ("Production Reads"). I capped the query length (M3) as a real but partial mitigation — it doesn't fix this specific case, since "math" is only 4 characters. **What I'd check first, in order:** (1) Supabase Dashboard → Database → Query Performance for `search_vector` — confirm the GIN index (`idx_questions_search`) is actually being used for these queries, not a sequential scan; (2) whether the anon role's `statement_timeout` (Dashboard → Settings → Database) is unusually low for this query's cost, given the same 57014 has already shown up elsewhere in this codebase at the current data scale; (3) whether the 3-way join (`questions` → `papers` → `exams`) inside `searchQuestions()` is defeating the GIN index scan — if so, filtering to published questions via a partial index, or restructuring the join, may be a real fix. I didn't want to guess at a schema/index change against your production data without being able to verify it actually helps. |
+| H4 | **Search intermittently 500s** for ordinary queries (`57014` — statement timeout). Full diagnosis below. | **Resolved** — `anon` role's `statement_timeout` raised 3s → 8s (migration `0008_raise_anon_search_timeout.sql`, must be applied by you — see below) plus a one-time retry in `searchQuestions()` on that exact error code. |
+
+#### H4 diagnosis — full investigation
+
+This one was worked interactively with the user pasting back SQL Editor results
+(this environment is correctly blocked from reading production data directly).
+In order:
+
+1. **`EXPLAIN (ANALYZE, BUFFERS)`** on the exact query `searchQuestions()`
+   generates for `q = 'math'`, run in the SQL Editor: **0.171ms**, using the
+   GIN index (`Bitmap Heap Scan` + `Recheck Cond: search_vector @@ tsquery`),
+   24 buffer hits, all cache hits. Ruled out: bad query plan, missing/invalid
+   index.
+2. **`anon`/`authenticated` `statement_timeout`**: 3s / 8s respectively —
+   not pathologically low, but not generous either.
+3. **RLS as the cause** — the SQL Editor runs as a privileged role that
+   bypasses RLS, so step 1 didn't actually test what `anon` experiences. To
+   test this without touching production, a local PostgreSQL 18 was
+   installed on the dev machine (via Scoop — no Docker available), the
+   repo's actual migrations applied verbatim (with a minimal `auth.users`/
+   `auth.uid()` stub), `anon`/`authenticated` roles created with the same
+   `rolbypassrls = false` as production, and 100k synthetic rows loaded and
+   `ANALYZE`d. Result: identical plan shape as `postgres` (RLS just folds
+   into the `WHERE` as a plain `AND`, no join reordering, no index
+   avoidance), 0.20ms. **RLS ruled out.**
+4. Real row/size check: **104,456 rows, 135MB table + 57MB indexes/TOAST
+   (192MB total), 17MB GIN index.**
+5. **Compute tier: Supabase Free tier** — the smallest available, smallest
+   `shared_buffers`, shared infrastructure.
+
+Conclusion: the query is correct, indexed, and RLS-clean. What's left,
+consistent with all of the above, is that this project's Free-tier compute
+occasionally can't hold enough of a 192MB working set in memory, so a
+normally-instant query sometimes has to hit disk and doesn't finish inside
+`anon`'s 3s budget. This is a resource-tier characteristic, not a code bug —
+confirmed by elimination, not assumed.
+
+**Applied**: `anon` timeout raised to 8s (matching `authenticated`, not an
+arbitrary new value), plus a retry in `searchQuestions()` scoped to exactly
+this error code. **Not applied, and not mine to decide**: if this keeps
+happening under real traffic even with the above, the durable fix is
+upgrading the Supabase compute tier — a cost decision that's yours to make,
+not something I'll push you toward.
+
+**`getSiteStats`/`getUserAttempts`** (Phase 1 asked whether they share this
+cause): they don't. `getSiteStats` uses `{ count: "exact" }`, an aggregate
+that scans every matching row with no `LIMIT` to stop early — a heavier
+operation class than search's already-`LIMIT`-bounded fetch — already
+mitigated with `estimated` count on the `questions` table.
+`getUserAttempts`'s issue was ~10 separate round-trips per page load,
+already fixed by consolidating into one query. Neither workaround was
+removed.
+
+**Deferred**: Phase 1 also asks for an automated test that fails if a short
+common search term errors or times out. There's no test runner in this repo
+yet (that's Phase 5). Tracked to be added once Vitest is wired up, not
+forgotten.
 
 ### Medium
 

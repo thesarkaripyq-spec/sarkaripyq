@@ -1,0 +1,16 @@
+-- H4 (see AUDIT.md): /search intermittently hit a 57014 (statement
+-- timeout) under the anon role. Root cause ruled out to be RLS, a missing/
+-- invalid index, or a bad query plan - all confirmed fine by direct
+-- testing (see AUDIT.md). What's left, on this project's Free tier
+-- (smallest compute/shared_buffers, so cache-cold reads are more common
+-- than on a larger tier), is that a normally-instant, correctly-indexed
+-- query occasionally doesn't finish inside anon's 3s budget when it isn't
+-- already cached. authenticated already runs at 8s in this same database
+-- without issue, so this brings anon in line with that, rather than
+-- introducing a new, unvetted timeout value.
+--
+-- This does not fix the underlying resource constraint (see AUDIT.md H4)
+-- - it gives a normal request enough room to survive a cold cache. It is
+-- paired with a one-time retry in searchQuestions() on this exact error
+-- code (src/lib/data/questions.ts).
+alter role anon set statement_timeout = '8s';

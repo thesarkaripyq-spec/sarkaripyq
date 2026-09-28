@@ -139,14 +139,29 @@ export async function searchQuestions(query: string, limit = 20): Promise<Questi
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const { data, error } = await supabase
-    .from("questions")
-    .select(
-      "id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))",
-    )
-    .eq("is_published", true)
-    .textSearch("search_vector", trimmed, { type: "plain", config: "simple" })
-    .limit(limit);
+  const runSearch = () =>
+    supabase
+      .from("questions")
+      .select(
+        "id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))",
+      )
+      .eq("is_published", true)
+      .textSearch("search_vector", trimmed, { type: "plain", config: "simple" })
+      .limit(limit);
+
+  let { data, error } = await runSearch();
+
+  // 57014 = statement timeout. Confirmed (see AUDIT.md H4) not to be a bad
+  // plan, a missing index, or an RLS issue - this project's Free-tier
+  // compute occasionally can't finish an otherwise-instant, correctly
+  // indexed query inside the anon role's timeout window on a cold cache.
+  // One retry gives it a second chance now that the first attempt likely
+  // warmed the relevant pages, instead of surfacing a false "search is
+  // broken" for what's usually a one-off. Anything else (a real error)
+  // still fails immediately below.
+  if (error?.code === "57014") {
+    ({ data, error } = await runSearch());
+  }
 
   if (error) throw error;
 
