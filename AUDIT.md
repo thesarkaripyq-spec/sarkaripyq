@@ -763,16 +763,35 @@ one real infrastructure limit found and not worked around.**
      message consistently, not the fixed "invalid" one — this is a
      configuration ceiling, not a flaky retry-and-it'll-pass situation,
      so retrying blindly would just burn more of the same quota.
-3. **Not attempted, out of caution**: bookmarks/attempts/
-   account-deletion e2e coverage, since those also create real
-   auth-adjacent state and I wanted this rate-limit question resolved
-   (or at least clearly handed to you) before generating more signups.
+**Update**: bookmarks and account-deletion coverage are done after all
+— `createConfirmedTestUser` goes through the **admin** API, not the
+public `signUp()` the rate limit above applies to, so neither touches
+that quota. Both green:
+
+- **`e2e/account-deletion.spec.ts`** — drives the real `/profile`
+  "type DELETE to confirm" flow, then confirms the session is
+  genuinely gone server-side (`/dashboard` redirects to `/login`
+  afterward), not just that the UI looks logged out.
+- **`e2e/bookmarks.spec.ts`** — bookmarks a real seeded question from
+  the practice page, confirms it shows on `/bookmarks`, removes it,
+  confirms the empty state returns. `deleteTestUser` in `afterEach` is
+  a safety net (cascades any leftover bookmark row), not the primary
+  cleanup — the test removes the bookmark itself via the UI.
+
+Both checked for leaked users afterward via the admin API directly
+(not assumed) — zero, in both cases.
+
+**Still not built**: practice-attempts e2e coverage (answering a
+question, dashboard stats reflecting it) — a reasonable next slice, not
+started yet.
 
 **What you need to do**: Dashboard → Authentication → Rate Limits on
 the **test project** (`gadeobjbzjnpuvwvbrdq`, not production) — raise
 whatever governs sign-up/email-sending, or just wait for the hourly
-window to reset, then re-run `npm run test:e2e`. The test itself is
-correct; it's blocked on this setting, not on anything code can fix.
+window to reset, then re-run `npm run test:e2e` to confirm
+`auth-signup.spec.ts`'s happy path too. Everything else in the suite is
+already green: 28 passed, 10 legitimately skipped, only that one test
+blocked.
 
 ---
 
