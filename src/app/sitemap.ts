@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { siteUrl } from "@/lib/utils";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   // /search is intentionally excluded: it's noindex'd in its own metadata,
   // so listing it here would contradict that directive.

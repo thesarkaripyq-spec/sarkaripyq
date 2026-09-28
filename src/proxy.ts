@@ -1,43 +1,82 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Every route in this app already renders dynamically on every request
-// (root layout reads cookies() to know the auth state - see AUDIT.md, A1),
-// so a per-request nonce-based CSP costs nothing extra in caching; it just
-// wasn't wired up before. `strict-dynamic` means only scripts carrying the
-// nonce (or scripts inserted by a nonced script) can run - Next.js
-// auto-attaches the nonce to its own framework/page bundles, so only the
-// hand-written inline <script> tags (theme-init + JSON-LD, in layout.tsx
-// and the breadcrumb pages) need it passed explicitly via headers().
-function buildCsp(nonce: string): string {
+// Pages that render per-user/interactive content and therefore already pay
+// the cost of dynamic rendering (see AUDIT.md A1/Phase 2) - everything else
+// is public catalog content that now renders statically/ISR, and can't use
+// a per-request nonce (there is no request at static-generation time).
+const DYNAMIC_PATH_PREFIXES = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/dashboard",
+  "/bookmarks",
+  "/profile",
+  "/search",
+  "/auth/callback",
+];
+
+function isDynamicPath(pathname: string): boolean {
+  return DYNAMIC_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+const SHARED_DIRECTIVES = [
+  "default-src 'self'",
+  // 'unsafe-inline' kept for style-src on both variants: the dashboard's
+  // bar-chart widths are set via React's `style` prop, which neither a
+  // script nonce nor a script hash covers.
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https://*.supabase.co",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+];
+
+// `strict-dynamic` means only scripts carrying the nonce (or scripts
+// inserted by a nonced script) can run - Next.js auto-attaches the nonce to
+// its own framework/page bundles automatically (by parsing this header),
+// so nothing in these routes needs to read the nonce explicitly.
+function buildDynamicCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
-    // 'unsafe-inline' kept for style-src: the dashboard's bar-chart widths
-    // are set via React's `style` prop, which a script nonce doesn't cover.
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https://*.supabase.co",
-    "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
+    ...SHARED_DIRECTIVES.slice(1),
   ].join("; ");
 }
 
+// Verified directly (production build + real browser + console) before
+// choosing this: a nonce/hash-only script-src is not viable for statically
+// rendered pages. Next.js injects multiple inline bootstrap/RSC-payload
+// <script> tags per page whose content is not fixed across pages (or even
+// deterministic in general), so hash-listing them is impractical - without
+// covering all of them, hydration fails outright (confirmed: React error
+// #412). 'unsafe-inline' is therefore required here, not a shortcut.
+// JSON-LD (theme-init/Organization/WebSite/breadcrumb <script
+// type="application/ld+json">) is unaffected either way: verified that its
+// content stays fully present and DOM-readable regardless of whether CSP
+// "blocks execution" of it - crawlers read the serialized text node, they
+// don't execute it as JS.
+const STATIC_CSP = [SHARED_DIRECTIVES[0], "script-src 'self' 'unsafe-inline'", ...SHARED_DIRECTIVES.slice(1)].join(
+  "; ",
+);
+
 // Refreshes the Supabase auth session cookie on every request so server
-// components always see an up-to-date session, and sets a fresh CSP nonce
-// for the request (forwarded to Server Components via the `x-nonce`
-// request header, and into the Content-Security-Policy response header).
+// components always see an up-to-date session, and sets the Content-
+// Security-Policy for the request - nonce+strict-dynamic on the dynamic,
+// per-user routes, a static 'unsafe-inline' policy everywhere else.
 export async function proxy(request: NextRequest) {
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCsp(nonce);
+  const dynamic = isDynamicPath(request.nextUrl.pathname);
+  const nonce = dynamic ? Buffer.from(crypto.randomUUID()).toString("base64") : null;
+  const csp = nonce ? buildDynamicCsp(nonce) : STATIC_CSP;
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
+  if (nonce) requestHeaders.set("x-nonce", nonce);
 
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);

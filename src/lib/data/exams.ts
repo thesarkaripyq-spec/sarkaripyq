@@ -1,35 +1,40 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
+import { withTimeoutRetry } from "@/lib/supabase/retry";
 import type { Exam, Paper, Subject } from "@/types/database";
 
 export async function getActiveExams(category = "ssc"): Promise<Exam[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("exams")
-    .select("id, slug, category, name, full_name, description, is_active, display_order")
-    .eq("category", category)
-    .eq("is_active", true)
-    .order("display_order", { ascending: true })
-    .returns<Exam[]>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("exams")
+      .select("id, slug, category, name, full_name, description, is_active, display_order")
+      .eq("category", category)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .returns<Exam[]>(),
+  );
 
   if (error) throw error;
   return data ?? [];
 }
 
 export async function getExamBySlug(slug: string): Promise<Exam | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("exams")
-    .select("id, slug, category, name, full_name, description, is_active, display_order")
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .maybeSingle<Exam>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("exams")
+      .select("id, slug, category, name, full_name, description, is_active, display_order")
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .maybeSingle<Exam>(),
+  );
 
   if (error) throw error;
   return data;
 }
 
 export async function getYearsForExam(examId: string, tier?: string): Promise<number[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   let query = supabase
     .from("papers")
     .select("year")
@@ -38,14 +43,14 @@ export async function getYearsForExam(examId: string, tier?: string): Promise<nu
 
   if (tier) query = query.eq("tier", tier);
 
-  const { data, error } = await query.order("year", { ascending: false });
+  const { data, error } = await withTimeoutRetry(() => query.order("year", { ascending: false }));
 
   if (error) throw error;
   return [...new Set((data ?? []).map((r) => r.year as number))];
 }
 
 export async function getPapersForExamYear(examId: string, year: number, tier?: string): Promise<Paper[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   let query = supabase
     .from("papers")
     .select("id, exam_id, year, tier, exam_date, shift, slug, title, question_count, is_published")
@@ -55,7 +60,9 @@ export async function getPapersForExamYear(examId: string, year: number, tier?: 
 
   if (tier) query = query.eq("tier", tier);
 
-  const { data, error } = await query.order("exam_date", { ascending: true }).returns<Paper[]>();
+  const { data, error } = await withTimeoutRetry(() =>
+    query.order("exam_date", { ascending: true }).returns<Paper[]>(),
+  );
 
   if (error) throw error;
   return data ?? [];
@@ -66,12 +73,10 @@ export async function getPapersForExamYear(examId: string, year: number, tier?: 
 // exams (MTS, GD, Stenographer, Selection Post) are single-tier and this
 // returns [] for them.
 export async function getExamTiers(examId: string): Promise<string[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("papers")
-    .select("tier")
-    .eq("exam_id", examId)
-    .eq("is_published", true);
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase.from("papers").select("tier").eq("exam_id", examId).eq("is_published", true),
+  );
 
   if (error) throw error;
   return [...new Set((data ?? []).map((r) => r.tier as string))].filter(Boolean);
@@ -82,27 +87,31 @@ export async function getPaperBySlug(
   year: number,
   shiftSlug: string,
 ): Promise<Paper | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("papers")
-    .select("id, exam_id, year, tier, exam_date, shift, slug, title, question_count, is_published")
-    .eq("exam_id", examId)
-    .eq("year", year)
-    .eq("slug", shiftSlug)
-    .eq("is_published", true)
-    .maybeSingle<Paper>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("papers")
+      .select("id, exam_id, year, tier, exam_date, shift, slug, title, question_count, is_published")
+      .eq("exam_id", examId)
+      .eq("year", year)
+      .eq("slug", shiftSlug)
+      .eq("is_published", true)
+      .maybeSingle<Paper>(),
+  );
 
   if (error) throw error;
   return data;
 }
 
 export async function getSubjectsForExam(examId: string): Promise<Subject[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("questions")
-    .select("subjects!inner(id, slug, name, display_order), papers!inner(exam_id)")
-    .eq("papers.exam_id", examId)
-    .returns<{ subjects: Subject }[]>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("questions")
+      .select("subjects!inner(id, slug, name, display_order), papers!inner(exam_id)")
+      .eq("papers.exam_id", examId)
+      .returns<{ subjects: Subject }[]>(),
+  );
 
   if (error) throw error;
 
@@ -114,36 +123,35 @@ export async function getSubjectsForExam(examId: string): Promise<Subject[]> {
 }
 
 export async function getSubjectBySlug(slug: string): Promise<Subject | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("subjects")
-    .select("id, slug, name, display_order")
-    .eq("slug", slug)
-    .maybeSingle<Subject>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase.from("subjects").select("id, slug, name, display_order").eq("slug", slug).maybeSingle<Subject>(),
+  );
 
   if (error) throw error;
   return data;
 }
 
 export async function getYearsForSubject(subjectId: string): Promise<number[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("questions")
-    .select("papers!inner(year)")
-    .eq("subject_id", subjectId)
-    .eq("is_published", true)
-    .returns<{ papers: { year: number } }[]>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("questions")
+      .select("papers!inner(year)")
+      .eq("subject_id", subjectId)
+      .eq("is_published", true)
+      .returns<{ papers: { year: number } }[]>(),
+  );
 
   if (error) throw error;
   return [...new Set((data ?? []).map((r) => r.papers.year))].sort((a, b) => b - a);
 }
 
 export async function getPaperCountsByExam(): Promise<Map<string, number>> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("papers")
-    .select("exam_id")
-    .eq("is_published", true);
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase.from("papers").select("exam_id").eq("is_published", true),
+  );
 
   if (error) throw error;
 
@@ -161,14 +169,16 @@ export interface SiteStats {
 }
 
 export async function getSiteStats(): Promise<SiteStats> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const [papers, questions, exams] = await Promise.all([
-    supabase.from("papers").select("id", { count: "exact", head: true }).eq("is_published", true),
+    withTimeoutRetry(() => supabase.from("papers").select("id", { count: "exact", head: true }).eq("is_published", true)),
     // "exact" scans all 100k+ rows and reliably hits the 57014 statement
     // timeout under the anon role (see questions.ts for the same issue on a
     // smaller join) - "estimated" uses the planner's row estimate instead.
-    supabase.from("questions").select("id", { count: "estimated", head: true }).eq("is_published", true),
-    supabase.from("exams").select("id", { count: "exact", head: true }).eq("is_active", true),
+    withTimeoutRetry(() =>
+      supabase.from("questions").select("id", { count: "estimated", head: true }).eq("is_published", true),
+    ),
+    withTimeoutRetry(() => supabase.from("exams").select("id", { count: "exact", head: true }).eq("is_active", true)),
   ]);
 
   return {
@@ -179,12 +189,10 @@ export async function getSiteStats(): Promise<SiteStats> {
 }
 
 export async function getAllSubjects(): Promise<Subject[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("subjects")
-    .select("id, slug, name, display_order")
-    .order("display_order", { ascending: true })
-    .returns<Subject[]>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase.from("subjects").select("id, slug, name, display_order").order("display_order", { ascending: true }).returns<Subject[]>(),
+  );
 
   if (error) throw error;
   return data ?? [];

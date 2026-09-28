@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { CalendarDays } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getExamTiers, getYearsForExam } from "@/lib/data/exams";
@@ -8,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/layout/PageHero";
 import { TierToggle } from "@/components/exam/TierToggle";
 import { siteUrl } from "@/lib/utils";
+import { safeJsonLd } from "@/lib/json-ld";
 
 export const revalidate = 300;
 
@@ -34,12 +34,10 @@ export default async function ExamPyqYearsPage({ params, searchParams }: Props) 
   const exam = await getExamBySlug(examSlug);
   if (!exam) notFound();
 
-  const [years, tiers, requestHeaders] = await Promise.all([
+  const [years, tiers] = await Promise.all([
     getYearsForExam(exam.id, tier),
     getExamTiers(exam.id),
-    headers(),
   ]);
-  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   const yearHref = (year: number) =>
     `/ssc/${exam.slug}/pyq/${year}${tier ? `?tier=${encodeURIComponent(tier)}` : ""}`;
@@ -58,8 +56,7 @@ export default async function ExamPyqYearsPage({ params, searchParams }: Props) 
     <div>
       <script
         type="application/ld+json"
-        nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
       />
       <PageHero
         icon={CalendarDays}

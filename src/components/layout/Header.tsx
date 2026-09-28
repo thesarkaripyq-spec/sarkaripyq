@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { BookOpen, LayoutGrid, Search, User as UserIcon, Users } from "lucide-react";
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { BookOpen, LayoutGrid, Search, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { MobileMenu } from "@/components/layout/MobileMenu";
+import { AuthStatus } from "@/components/layout/AuthStatus";
 
-export function Header({ user }: { user: { email: string } | null }) {
+export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/95 shadow-subtle backdrop-blur dark:border-ink-700 dark:bg-ink-900/95">
       <div className="h-[3px] w-full bg-gradient-to-r from-brand-600 via-brand-400 to-brand-600" />
@@ -58,36 +58,9 @@ export function Header({ user }: { user: { email: string } | null }) {
 
           <ThemeToggle />
 
-          <MobileMenu user={user} />
+          <MobileMenu />
 
-          {user ? (
-            <div className="hidden items-center gap-2 pl-1 md:flex">
-              <Link
-                href="/dashboard"
-                title={user.email}
-                className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 transition-colors hover:border-ink-300 dark:border-ink-700 dark:text-ink-200 dark:hover:border-ink-600"
-              >
-                <UserIcon size={16} aria-hidden />
-                Dashboard
-              </Link>
-              <SignOutButton />
-            </div>
-          ) : (
-            <div className="hidden items-center gap-3 pl-1 md:flex">
-              <Link
-                href="/login"
-                className="text-sm font-semibold text-ink-700 transition-colors hover:text-brand-600 dark:text-ink-200"
-              >
-                Login
-              </Link>
-              <Link
-                href="/signup"
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-subtle transition-colors hover:bg-brand-700"
-              >
-                Sign Up Free
-              </Link>
-            </div>
-          )}
+          <AuthStatus />
         </div>
       </div>
     </header>

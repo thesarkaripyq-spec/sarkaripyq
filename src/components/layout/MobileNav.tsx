@@ -4,9 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, PencilLine, BarChart3, Bookmark, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthUser } from "@/lib/hooks/useAuthUser";
 
-export function MobileNav({ isAuthed }: { isAuthed: boolean }) {
+export function MobileNav() {
   const pathname = usePathname();
+  // Treat "still resolving" the same as "signed out" - the safe default,
+  // and only ever visible for the brief window before the client-side
+  // session check (near-instant, see useAuthUser) resolves.
+  const isAuthed = !!useAuthUser();
 
   const items = [
     { href: "/", label: "Home", icon: Home },

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -15,6 +16,12 @@ export function SignOutButton() {
     try {
       const res = await fetch("/api/auth/signout", { method: "POST" });
       if (res.ok) {
+        // Also sign out the browser client directly: Header/MobileNav now
+        // read auth state client-side (see useAuthUser), which is driven
+        // by this client's own session, not just the server-side cookie
+        // clear above. Without this, the header could keep showing the
+        // user as logged in until the access token's natural expiry.
+        await createClient().auth.signOut();
         router.push("/");
         router.refresh();
       } else {

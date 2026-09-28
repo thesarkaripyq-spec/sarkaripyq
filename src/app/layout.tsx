@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { headers } from "next/headers";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Footer } from "@/components/layout/Footer";
-import { createClient } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/utils";
+import { safeJsonLd } from "@/lib/json-ld";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -81,18 +80,15 @@ const jsonLd = {
   ],
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [supabase, requestHeaders] = await Promise.all([createClient(), headers()]);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const nonce = requestHeaders.get("x-nonce") ?? undefined;
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Deliberately no cookies()/headers() call anywhere in this layout (see
+  // AUDIT.md A1/Phase 2): it wraps every route, so any Dynamic API call
+  // here would force the entire app to render dynamically. Header's auth
+  // state is resolved client-side instead (see AuthStatus/useAuthUser).
   return (
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script
-          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{if(localStorage.getItem("theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}})()`,
           }}
@@ -101,13 +97,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={inter.className}>
         <script
           type="application/ld+json"
-          nonce={nonce}
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
         />
-        <Header user={user ? { email: user.email ?? "" } : null} />
+        <Header />
         <main className="min-h-[60vh] pb-16 md:pb-0">{children}</main>
         <Footer />
-        <MobileNav isAuthed={!!user} />
+        <MobileNav />
       </body>
     </html>
   );

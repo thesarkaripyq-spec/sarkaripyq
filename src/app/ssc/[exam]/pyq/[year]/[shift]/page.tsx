@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getPaperBySlug, getSubjectBySlug, getSubjectsForExam } from "@/lib/data/exams";
 import { getQuestionByPaperAndNumber, getQuestionNumbersForPaper } from "@/lib/data/questions";
@@ -7,6 +6,7 @@ import { SubjectTabs } from "@/components/exam/SubjectTabs";
 import { QuestionPractice } from "@/components/question/QuestionPractice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatExamDate, siteUrl } from "@/lib/utils";
+import { safeJsonLd } from "@/lib/json-ld";
 
 export const revalidate = 300;
 
@@ -40,12 +40,10 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
   const paper = await getPaperBySlug(exam.id, yearNum, shift);
   if (!paper) notFound();
 
-  const [subjects, subjectFilter, requestHeaders] = await Promise.all([
+  const [subjects, subjectFilter] = await Promise.all([
     getSubjectsForExam(exam.id),
     subjectSlug ? getSubjectBySlug(subjectSlug) : Promise.resolve(null),
-    headers(),
   ]);
-  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   const questionList = await getQuestionNumbersForPaper(paper.id, subjectFilter?.id);
   const questionNumbers = questionList.map((item) => item.question_number);
@@ -91,8 +89,7 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
     <div>
       <script
         type="application/ld+json"
-        nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
       />
       <h1 className="sr-only">
         {paper.title} {subtitleParts.join(" • ")} — Question {currentQuestionNumber}

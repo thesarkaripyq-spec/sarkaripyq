@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, LayoutGrid, Menu, Search, User as UserIcon, Users, X } from "lucide-react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { useAuthUser } from "@/lib/hooks/useAuthUser";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: LayoutGrid },
@@ -13,7 +14,8 @@ const NAV_LINKS = [
   { href: "/leaderboard", label: "Leaderboard", icon: Users },
 ];
 
-export function MobileMenu({ user }: { user: { email: string } | null }) {
+export function MobileMenu() {
+  const user = useAuthUser();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -130,7 +132,9 @@ export function MobileMenu({ user }: { user: { email: string } | null }) {
             </nav>
 
             <div className="mt-auto flex flex-col gap-2 border-t border-ink-100 pt-4 dark:border-ink-700">
-              {user ? (
+              {user === undefined ? (
+                <div className="h-11 animate-pulse rounded-md bg-ink-50 dark:bg-ink-800" aria-hidden />
+              ) : user ? (
                 <>
                   <Link
                     href="/dashboard"

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { ArrowRight, GraduationCap } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getExamBySlug, getSubjectsForExam, getYearsForExam } from "@/lib/data/exams";
@@ -8,12 +7,22 @@ import { SubjectCard } from "@/components/exam/SubjectCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/layout/PageHero";
 import { siteUrl } from "@/lib/utils";
+import { safeJsonLd } from "@/lib/json-ld";
 
 export const revalidate = 300;
 
 interface Props {
   params: Promise<{ exam: string }>;
 }
+
+// Deliberately no generateStaticParams here: pre-rendering every exam
+// concurrently at build time was tried and concretely failed a build (see
+// AUDIT.md H4/Phase 2) - prerendering "/ssc/gd" hit the same 57014
+// statement-timeout as H4, because a burst of concurrent build-time
+// queries is exactly the kind of load this project's Free-tier compute
+// struggles with. Rendering on first real request and letting ISR cache
+// it from there spreads that load out naturally instead of concentrating
+// it into one risky build-time burst.
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { exam: examSlug } = await params;
@@ -32,12 +41,10 @@ export default async function ExamOverviewPage({ params }: Props) {
   const exam = await getExamBySlug(examSlug);
   if (!exam) notFound();
 
-  const [subjects, years, requestHeaders] = await Promise.all([
+  const [subjects, years] = await Promise.all([
     getSubjectsForExam(exam.id),
     getYearsForExam(exam.id),
-    headers(),
   ]);
-  const nonce = requestHeaders.get("x-nonce") ?? undefined;
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -52,8 +59,7 @@ export default async function ExamOverviewPage({ params }: Props) {
     <div>
       <script
         type="application/ld+json"
-        nonce={nonce}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
       />
       <PageHero icon={GraduationCap} eyebrow={exam.name} title={`${exam.name} Previous Year Questions`} description={exam.full_name ?? undefined} />
 

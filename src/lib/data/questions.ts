@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
+import { withTimeoutRetry } from "@/lib/supabase/retry";
 import type { OptionRow, QuestionDetail, QuestionListItem } from "@/types/database";
 
 interface QuestionRow {
@@ -17,7 +18,7 @@ export async function getQuestionNumbersForPaper(
   paperId: string,
   subjectId?: string,
 ): Promise<QuestionListItem[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   let query = supabase
     .from("questions")
     .select("id, paper_id, subject_id, topic_id, question_number")
@@ -27,7 +28,7 @@ export async function getQuestionNumbersForPaper(
 
   if (subjectId) query = query.eq("subject_id", subjectId);
 
-  const { data, error } = await query.returns<QuestionListItem[]>();
+  const { data, error } = await withTimeoutRetry(() => query.returns<QuestionListItem[]>());
   if (error) throw error;
   return data ?? [];
 }
@@ -36,16 +37,18 @@ export async function getQuestionByPaperAndNumber(
   paperId: string,
   questionNumber: number,
 ): Promise<QuestionDetail | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("questions")
-    .select(
-      "id, paper_id, subject_id, topic_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
-    )
-    .eq("paper_id", paperId)
-    .eq("question_number", questionNumber)
-    .eq("is_published", true)
-    .maybeSingle<QuestionRow>();
+  const supabase = createPublicClient();
+  const { data, error } = await withTimeoutRetry(() =>
+    supabase
+      .from("questions")
+      .select(
+        "id, paper_id, subject_id, topic_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
+      )
+      .eq("paper_id", paperId)
+      .eq("question_number", questionNumber)
+      .eq("is_published", true)
+      .maybeSingle<QuestionRow>(),
+  );
 
   if (error) throw error;
   if (!data) return null;
@@ -81,7 +84,7 @@ export async function listQuestionsBySubject(
   filters: SubjectBrowseFilters = {},
 ): Promise<{ items: SubjectBrowseItem[]; total: number }> {
   const { examSlug, year, tier, page = 1, pageSize = 20 } = filters;
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   let query = supabase
     .from("questions")
@@ -102,9 +105,9 @@ export async function listQuestionsBySubject(
   if (tier) query = query.eq("papers.tier", tier);
 
   const from = (page - 1) * pageSize;
-  const { data, error, count } = await query
-    .order("question_number", { ascending: true })
-    .range(from, from + pageSize - 1);
+  const { data, error, count } = await withTimeoutRetry(() =>
+    query.order("question_number", { ascending: true }).range(from, from + pageSize - 1),
+  );
 
   if (error) throw error;
 
@@ -135,33 +138,18 @@ export interface QuestionSearchResult {
 }
 
 export async function searchQuestions(query: string, limit = 20): Promise<QuestionSearchResult[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const runSearch = () =>
+  const { data, error } = await withTimeoutRetry(() =>
     supabase
       .from("questions")
-      .select(
-        "id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))",
-      )
+      .select("id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))")
       .eq("is_published", true)
       .textSearch("search_vector", trimmed, { type: "plain", config: "simple" })
-      .limit(limit);
-
-  let { data, error } = await runSearch();
-
-  // 57014 = statement timeout. Confirmed (see AUDIT.md H4) not to be a bad
-  // plan, a missing index, or an RLS issue - this project's Free-tier
-  // compute occasionally can't finish an otherwise-instant, correctly
-  // indexed query inside the anon role's timeout window on a cold cache.
-  // One retry gives it a second chance now that the first attempt likely
-  // warmed the relevant pages, instead of surfacing a false "search is
-  // broken" for what's usually a one-off. Anything else (a real error)
-  // still fails immediately below.
-  if (error?.code === "57014") {
-    ({ data, error } = await runSearch());
-  }
+      .limit(limit),
+  );
 
   if (error) throw error;
 
