@@ -553,6 +553,90 @@ digits," but that's evidence, not confirmation. I'm not going to rename
 `scripts/seed.mjs`/`db:seed` are untouched either way — seeding local dev
 data isn't part of what you asked to move to the CLI.
 
+### Testing (Phase 5) — test data isolation, decided so far
+
+**Postgres version — confirmed, no change needed.** You reported
+`PostgreSQL 17.6`; `supabase/config.toml`'s `db.major_version = 17`
+(the CLI's own default) already matches. Nothing to edit.
+
+**Existing e2e suite audited for live writes — none found.** Read all
+three spec files in full (`e2e/practice-subject.spec.ts`,
+`e2e/shift-practice.spec.ts`, `e2e/years-tier-filter.spec.ts`) end to
+end, not just grepped. Every test only does `page.goto()`, clicks on
+filter links/buttons, and asserts on URLs/visible text — there is no
+form submission, no login/signup, no bookmark/attempt action, and no
+`POST` of any kind anywhere in the suite. It only ever exercises the
+public, read-only catalog pages built in Phase 2. **Nothing was created
+on the live project by this suite — there is nothing to clean up.**
+
+**The `.env.test` isolation mechanism is now built and committed**
+(separate from this doc change) — see `playwright.config.ts` and
+`package.json`'s `test:e2e` script. Verified empirically, not assumed:
+Next.js has a first-class `test` environment that loads `.env.test` and
+**skips `.env.local` entirely** when `NODE_ENV=test` — confirmed by
+putting a canary value in a throwaway `.env.test` with no Supabase vars
+at all and running a real build, which failed with `supabaseUrl is
+required` instead of silently falling back to `.env.local`'s real
+project. `package.json`'s `test:e2e` now sets `NODE_ENV=test` for both
+the build and the Playwright run (NEXT_PUBLIC_* vars are inlined at
+*build* time, so the build step needs it too, not just the server
+start), via a pinned `cross-env@^7` (the current default major declares
+a Node ≥22 requirement this machine doesn't meet). `.env.test` itself
+is gitignored like `.env.local` — real credentials, never committed.
+`.env.test.example` documents the shape and is committed.
+
+**What's still missing is the backend `.env.test` should point at** —
+this needs your decision, and I checked what's actually available on
+this machine rather than assume either path is free:
+
+**Docker — checked, not available.** No `docker` on PATH, no Docker
+Desktop install found at the standard path, no Docker service, and
+**WSL2 itself isn't installed either** (`wsl --list` reports it's not
+installed) — Docker Desktop on Windows needs WSL2 as its backend, so
+this is a two-part install, not one.
+
+#### Option A — install Docker Desktop (for local Supabase via `supabase start`)
+
+1. Open an **elevated** PowerShell and run `wsl --install`, then
+   **restart the machine** — required, not optional, for WSL2 to
+   activate.
+2. Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/).
+   During setup, make sure "Use the WSL 2 based engine" is selected
+   (it's the default on current versions).
+3. Start Docker Desktop once, then verify from a terminal: `docker info`
+   should succeed without error.
+4. `supabase start` (uses the `supabase/config.toml` already committed) —
+   spins up local Postgres/Auth/Storage in containers, applies every
+   file in `supabase/migrations/` fresh to the new local DB, and seeds
+   from `supabase/seed/*.sql` (already pointed there in config.toml).
+5. `supabase status` prints the local API URL and anon/service-role
+   keys — those go into `.env.test`.
+
+#### Option B — a separate, dedicated free Supabase project
+
+1. Create a new project at supabase.com — free tier, entirely separate
+   from your production project, its own billing/usage.
+2. Apply the schema to it: run `scripts/run-migrations.mjs` against
+   *this new project's* `SUPABASE_DB_URL` (the existing custom script,
+   not the CLI — deliberately not entangling this with the production
+   CLI-adoption decision above, which is a separate, already-deferred
+   question). Seed it the same way via `scripts/seed.mjs`.
+3. Get the new project's URL, anon key, service-role key, and DB URL
+   from *its own* dashboard → `.env.test`.
+
+**My read**: Option B is meaningfully less friction on this machine
+right now — no restart, no elevated install, nothing that touches
+system-level virtualization — while Option A gives you closer-to-"real"
+isolation (no network dependency, resets instantly via `supabase db
+reset`). Both satisfy the actual requirement (never touching the
+production project); which one is worth the setup cost is yours to
+call, not something to pick for you.
+
+**Deferred at your request**: the `supabase link` + `migration repair`
+walkthrough for the *production* project (immediately above) waits
+until after Phase 5, per your instruction — nothing about this section
+changes that.
+
 ---
 
 ## Already solid — verified, not touched
