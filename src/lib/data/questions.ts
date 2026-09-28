@@ -28,7 +28,10 @@ export async function getQuestionNumbersForPaper(
 
   if (subjectId) query = query.eq("subject_id", subjectId);
 
-  const { data, error } = await withTimeoutRetry(() => query.returns<QuestionListItem[]>());
+  const { data, error } = await withTimeoutRetry(
+    () => query.returns<QuestionListItem[]>(),
+    "questions.getQuestionNumbersForPaper",
+  );
   if (error) throw error;
   return data ?? [];
 }
@@ -38,16 +41,18 @@ export async function getQuestionByPaperAndNumber(
   questionNumber: number,
 ): Promise<QuestionDetail | null> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("questions")
-      .select(
-        "id, paper_id, subject_id, topic_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
-      )
-      .eq("paper_id", paperId)
-      .eq("question_number", questionNumber)
-      .eq("is_published", true)
-      .maybeSingle<QuestionRow>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("questions")
+        .select(
+          "id, paper_id, subject_id, topic_id, question_number, question_html, image_url, explanation_html, options(id, question_id, label, option_html, image_url, is_correct, display_order)",
+        )
+        .eq("paper_id", paperId)
+        .eq("question_number", questionNumber)
+        .eq("is_published", true)
+        .maybeSingle<QuestionRow>(),
+    "questions.getQuestionByPaperAndNumber",
   );
 
   if (error) throw error;
@@ -105,8 +110,9 @@ export async function listQuestionsBySubject(
   if (tier) query = query.eq("papers.tier", tier);
 
   const from = (page - 1) * pageSize;
-  const { data, error, count } = await withTimeoutRetry(() =>
-    query.order("question_number", { ascending: true }).range(from, from + pageSize - 1),
+  const { data, error, count } = await withTimeoutRetry(
+    () => query.order("question_number", { ascending: true }).range(from, from + pageSize - 1),
+    "questions.listQuestionsBySubject",
   );
 
   if (error) throw error;
@@ -142,13 +148,15 @@ export async function searchQuestions(query: string, limit = 20): Promise<Questi
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("questions")
-      .select("id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))")
-      .eq("is_published", true)
-      .textSearch("search_vector", trimmed, { type: "plain", config: "simple" })
-      .limit(limit),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("questions")
+        .select("id, question_number, question_html, papers!inner(year, slug, exams!inner(slug, name))")
+        .eq("is_published", true)
+        .textSearch("search_vector", trimmed, { type: "plain", config: "simple" })
+        .limit(limit),
+    "questions.searchQuestions",
   );
 
   if (error) throw error;

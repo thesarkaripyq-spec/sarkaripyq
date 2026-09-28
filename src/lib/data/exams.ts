@@ -4,14 +4,16 @@ import type { Exam, Paper, Subject } from "@/types/database";
 
 export async function getActiveExams(category = "ssc"): Promise<Exam[]> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("exams")
-      .select("id, slug, category, name, full_name, description, is_active, display_order")
-      .eq("category", category)
-      .eq("is_active", true)
-      .order("display_order", { ascending: true })
-      .returns<Exam[]>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("exams")
+        .select("id, slug, category, name, full_name, description, is_active, display_order")
+        .eq("category", category)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+        .returns<Exam[]>(),
+    "exams.getActiveExams",
   );
 
   if (error) throw error;
@@ -20,13 +22,15 @@ export async function getActiveExams(category = "ssc"): Promise<Exam[]> {
 
 export async function getExamBySlug(slug: string): Promise<Exam | null> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("exams")
-      .select("id, slug, category, name, full_name, description, is_active, display_order")
-      .eq("slug", slug)
-      .eq("is_active", true)
-      .maybeSingle<Exam>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("exams")
+        .select("id, slug, category, name, full_name, description, is_active, display_order")
+        .eq("slug", slug)
+        .eq("is_active", true)
+        .maybeSingle<Exam>(),
+    "exams.getExamBySlug",
   );
 
   if (error) throw error;
@@ -43,7 +47,10 @@ export async function getYearsForExam(examId: string, tier?: string): Promise<nu
 
   if (tier) query = query.eq("tier", tier);
 
-  const { data, error } = await withTimeoutRetry(() => query.order("year", { ascending: false }));
+  const { data, error } = await withTimeoutRetry(
+    () => query.order("year", { ascending: false }),
+    "exams.getYearsForExam",
+  );
 
   if (error) throw error;
   return [...new Set((data ?? []).map((r) => r.year as number))];
@@ -60,8 +67,9 @@ export async function getPapersForExamYear(examId: string, year: number, tier?: 
 
   if (tier) query = query.eq("tier", tier);
 
-  const { data, error } = await withTimeoutRetry(() =>
-    query.order("exam_date", { ascending: true }).returns<Paper[]>(),
+  const { data, error } = await withTimeoutRetry(
+    () => query.order("exam_date", { ascending: true }).returns<Paper[]>(),
+    "exams.getPapersForExamYear",
   );
 
   if (error) throw error;
@@ -74,8 +82,9 @@ export async function getPapersForExamYear(examId: string, year: number, tier?: 
 // returns [] for them.
 export async function getExamTiers(examId: string): Promise<string[]> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase.from("papers").select("tier").eq("exam_id", examId).eq("is_published", true),
+  const { data, error } = await withTimeoutRetry(
+    () => supabase.from("papers").select("tier").eq("exam_id", examId).eq("is_published", true),
+    "exams.getExamTiers",
   );
 
   if (error) throw error;
@@ -88,15 +97,17 @@ export async function getPaperBySlug(
   shiftSlug: string,
 ): Promise<Paper | null> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("papers")
-      .select("id, exam_id, year, tier, exam_date, shift, slug, title, question_count, is_published")
-      .eq("exam_id", examId)
-      .eq("year", year)
-      .eq("slug", shiftSlug)
-      .eq("is_published", true)
-      .maybeSingle<Paper>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("papers")
+        .select("id, exam_id, year, tier, exam_date, shift, slug, title, question_count, is_published")
+        .eq("exam_id", examId)
+        .eq("year", year)
+        .eq("slug", shiftSlug)
+        .eq("is_published", true)
+        .maybeSingle<Paper>(),
+    "exams.getPaperBySlug",
   );
 
   if (error) throw error;
@@ -105,12 +116,14 @@ export async function getPaperBySlug(
 
 export async function getSubjectsForExam(examId: string): Promise<Subject[]> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("questions")
-      .select("subjects!inner(id, slug, name, display_order), papers!inner(exam_id)")
-      .eq("papers.exam_id", examId)
-      .returns<{ subjects: Subject }[]>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("questions")
+        .select("subjects!inner(id, slug, name, display_order), papers!inner(exam_id)")
+        .eq("papers.exam_id", examId)
+        .returns<{ subjects: Subject }[]>(),
+    "exams.getSubjectsForExam",
   );
 
   if (error) throw error;
@@ -124,8 +137,9 @@ export async function getSubjectsForExam(examId: string): Promise<Subject[]> {
 
 export async function getSubjectBySlug(slug: string): Promise<Subject | null> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase.from("subjects").select("id, slug, name, display_order").eq("slug", slug).maybeSingle<Subject>(),
+  const { data, error } = await withTimeoutRetry(
+    () => supabase.from("subjects").select("id, slug, name, display_order").eq("slug", slug).maybeSingle<Subject>(),
+    "exams.getSubjectBySlug",
   );
 
   if (error) throw error;
@@ -134,13 +148,15 @@ export async function getSubjectBySlug(slug: string): Promise<Subject | null> {
 
 export async function getYearsForSubject(subjectId: string): Promise<number[]> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase
-      .from("questions")
-      .select("papers!inner(year)")
-      .eq("subject_id", subjectId)
-      .eq("is_published", true)
-      .returns<{ papers: { year: number } }[]>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("questions")
+        .select("papers!inner(year)")
+        .eq("subject_id", subjectId)
+        .eq("is_published", true)
+        .returns<{ papers: { year: number } }[]>(),
+    "exams.getYearsForSubject",
   );
 
   if (error) throw error;
@@ -149,8 +165,9 @@ export async function getYearsForSubject(subjectId: string): Promise<number[]> {
 
 export async function getPaperCountsByExam(): Promise<Map<string, number>> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase.from("papers").select("exam_id").eq("is_published", true),
+  const { data, error } = await withTimeoutRetry(
+    () => supabase.from("papers").select("exam_id").eq("is_published", true),
+    "exams.getPaperCountsByExam",
   );
 
   if (error) throw error;
@@ -171,14 +188,21 @@ export interface SiteStats {
 export async function getSiteStats(): Promise<SiteStats> {
   const supabase = createPublicClient();
   const [papers, questions, exams] = await Promise.all([
-    withTimeoutRetry(() => supabase.from("papers").select("id", { count: "exact", head: true }).eq("is_published", true)),
+    withTimeoutRetry(
+      () => supabase.from("papers").select("id", { count: "exact", head: true }).eq("is_published", true),
+      "exams.getSiteStats.papers",
+    ),
     // "exact" scans all 100k+ rows and reliably hits the 57014 statement
     // timeout under the anon role (see questions.ts for the same issue on a
     // smaller join) - "estimated" uses the planner's row estimate instead.
-    withTimeoutRetry(() =>
-      supabase.from("questions").select("id", { count: "estimated", head: true }).eq("is_published", true),
+    withTimeoutRetry(
+      () => supabase.from("questions").select("id", { count: "estimated", head: true }).eq("is_published", true),
+      "exams.getSiteStats.questions",
     ),
-    withTimeoutRetry(() => supabase.from("exams").select("id", { count: "exact", head: true }).eq("is_active", true)),
+    withTimeoutRetry(
+      () => supabase.from("exams").select("id", { count: "exact", head: true }).eq("is_active", true),
+      "exams.getSiteStats.exams",
+    ),
   ]);
 
   return {
@@ -190,8 +214,14 @@ export async function getSiteStats(): Promise<SiteStats> {
 
 export async function getAllSubjects(): Promise<Subject[]> {
   const supabase = createPublicClient();
-  const { data, error } = await withTimeoutRetry(() =>
-    supabase.from("subjects").select("id, slug, name, display_order").order("display_order", { ascending: true }).returns<Subject[]>(),
+  const { data, error } = await withTimeoutRetry(
+    () =>
+      supabase
+        .from("subjects")
+        .select("id, slug, name, display_order")
+        .order("display_order", { ascending: true })
+        .returns<Subject[]>(),
+    "exams.getAllSubjects",
   );
 
   if (error) throw error;
