@@ -131,9 +131,51 @@ forgotten.
 
 | # | Finding | Why I didn't just fix it |
 |---|---|---|
-| A1 | **Every route renders fully dynamically**, even though ~10 pages declare `export const revalidate = 300`. Confirmed via `npm run build` output: every route is marked `ƒ (Dynamic)` except `/robots.txt` and `/sitemap.xml`. Root cause: `layout.tsx` calls `supabase.auth.getUser()` (which reads cookies) on *every* request to know whether to render the header logged-in vs logged-out — and in Next's current (non-Cache-Components) rendering model, any cookie/header read anywhere in a route's render tree forces that entire route to skip static rendering and ISR, full stop. The `revalidate = 300` exports on the exam/subject/practice listing pages are currently inert. This doesn't break anything — content is still correct and server-rendered — but it means every page load re-runs the Supabase auth check and the page's DB queries from scratch, which costs more at scale than it needs to. **Fixing it properly means adopting Next 16's `cacheComponents` model**, which their own migration guide describes as "not a rename-only change: it can surface build errors for uncached data outside of `<Suspense>` and requires adopting the Cache Components model." That's a real project, not a hardening tweak, and I'm not willing to flip a config flag that changes the app's entire rendering model without you deciding that trade-off first. |
 | A2 | No self-service "forgot password" flow (Supabase supports `resetPasswordForEmail`; there's just no UI for it) and no account-deletion flow. Neither is a bug — the brief's Security section is about hardening what exists, not adding auth surface area — but a user who forgets their password today has no way back in except via Google sign-in. Flagging as a product decision, not building it unprompted. |
 | A3 | `LoginForm`/`SignupForm` call `supabase.auth.signInWithPassword` / `signUp` directly from the browser, bypassing the app's own `rate-limit.ts`. This is very likely fine — Supabase's hosted Auth service (GoTrue) does its own server-side rate limiting on these endpoints — but I can't verify your project's Supabase rate-limit configuration from here, so I'm noting it rather than asserting it's covered. Worth a 5-minute check in your Supabase dashboard (Auth → Rate Limits). |
+
+### A1 — static/ISR rendering (Phase 2, resolved for most public pages)
+
+**Was**: every route rendered fully dynamically, even though ~10 pages
+declared `export const revalidate = 300`. Root cause: `layout.tsx` called
+`supabase.auth.getUser()` (reads cookies) on every request for the header's
+auth state, and in Next's current (non-Cache-Components) model, any
+cookie/header read anywhere in a route's tree forces that whole route
+dynamic.
+
+**Fixed**: verified empirically that the layout fix alone was not enough —
+every public page's own data-fetching functions *also* called the
+cookie-aware client. Introduced a second, cookie-free `createPublicClient()`
+(`src/lib/supabase/public.ts`) for catalog reads (safe: those tables' RLS
+policies never depend on `auth.uid()`), moved Header/MobileNav/MobileMenu's
+auth-awareness to a client-side check with a neutral loading placeholder,
+and gave static pages a verified-necessary `'self' 'unsafe-inline'` CSP
+(nonce-based CSP doesn't work for statically rendered pages — see the Phase
+2 commit message for what was verified and how). Dynamic per-user pages
+(login/signup/dashboard/bookmarks/profile/search) keep the original
+nonce + `strict-dynamic` CSP unchanged.
+
+**Result**: `/`, `/practice`, `/ssc`, `/books`, `/sitemap.xml` now render
+statically/ISR.
+
+**Still dynamic, for a different and independent reason**: `/ssc/[exam]`,
+`/ssc/[exam]/pyq`, `/ssc/[exam]/pyq/[year]`, `/ssc/[exam]/pyq/[year]/[shift]`,
+and `/practice/[subject]` remain `ƒ`. Four of these five read `searchParams`
+(tier/subject/year/question-number filters) — under the current rendering
+model, that alone forces per-request rendering regardless of the cookie
+fix. This is exactly the kind of thing full Cache Components (PPR) is built
+to solve (a static shell with a `searchParams`-dependent dynamic hole) —
+flagging it rather than pursuing that migration unprompted, since it's the
+same scope of change the original A1 finding already declined to make
+unilaterally.
+
+**Also discovered**: pre-rendering every exam via `generateStaticParams`
+concentrates enough concurrent build-time load to hit the same 57014
+statement-timeout as H4, and concretely failed a build (`/ssc/gd`).
+Deliberately did not add `generateStaticParams` for this reason — a build
+failure is worse than a page rendering (and then ISR-caching) on first
+real request. Added the H4 retry pattern to every public catalog read as a
+general resilience improvement, which also makes this more robust.
 
 ---
 
