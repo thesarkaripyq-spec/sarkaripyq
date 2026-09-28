@@ -3,7 +3,9 @@ import path from "node:path";
 import { Client } from "pg";
 import { config } from "dotenv";
 
-config({ path: path.join(process.cwd(), ".env.local") });
+// Defaults to .env.local (unchanged behavior); pass a path to target a
+// different project, e.g. `node scripts/seed.mjs .env.test`.
+config({ path: path.join(process.cwd(), process.argv[2] ?? ".env.local") });
 
 const seedDir = path.join(process.cwd(), "supabase", "seed");
 

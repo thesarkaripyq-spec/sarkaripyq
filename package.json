@@ -12,7 +12,8 @@
     "test:unit": "vitest run",
     "test:e2e": "cross-env NODE_ENV=test next build && cross-env NODE_ENV=test playwright test",
     "db:migrate": "node scripts/run-migrations.mjs",
-    "db:seed": "node scripts/seed.mjs"
+    "db:seed": "node scripts/seed.mjs",
+    "db:seed:test": "node scripts/seed.mjs .env.test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
