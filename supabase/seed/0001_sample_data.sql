@@ -27,12 +27,23 @@ insert into subjects (slug, name, display_order) values
 
 -- CGL: tiered exam, 2 years, 2 tiers, 2 shifts in one year - exercises
 -- year/tier/shift listing and filtering.
+--
+-- Slugs are unique per (exam, year) here, not per (exam, year, tier) -
+-- matching how the app actually looks papers up: getPaperBySlug()
+-- (src/lib/data/exams.ts) queries by exam_id + year + slug only, with
+-- no tier filter (tier isn't part of the URL). Real imported data never
+-- collides here because slugs are date-derived (see
+-- scripts/testranking/normalize.py); this seed's Tier 2 paper is given
+-- 'shift-3' rather than reusing 'shift-1' for the same reason - reusing
+-- it (as an earlier version of this file did) made getPaperBySlug's
+-- .maybeSingle() match two rows and error, caught by actually running
+-- the e2e suite against this seed, not by reading the SQL.
 insert into papers (exam_id, year, tier, exam_date, shift, slug, title)
 select e.id, v.year, v.tier, v.exam_date, v.shift, v.slug, v.title
 from exams e, (values
   (2024, 'Tier 1', date '2024-09-11', 'Shift 1', 'shift-1', 'SSC CGL 2024 Tier 1'),
   (2024, 'Tier 1', date '2024-09-11', 'Shift 2', 'shift-2', 'SSC CGL 2024 Tier 1'),
-  (2024, 'Tier 2', date '2025-02-10', 'Shift 1', 'shift-1', 'SSC CGL 2024 Tier 2'),
+  (2024, 'Tier 2', date '2025-02-10', 'Shift 1', 'shift-3', 'SSC CGL 2024 Tier 2'),
   (2023, 'Tier 1', date '2023-07-30', 'Shift 1', 'shift-1', 'SSC CGL 2023 Tier 1')
 ) as v(year, tier, exam_date, shift, slug, title)
 where e.slug = 'cgl';
@@ -71,10 +82,10 @@ from (values
     '<p>The Simon Commission visited India in which year?</p>',
     '<p>The Simon Commission arrived in India in 1928.</p>', 3),
 
-  ('cgl', 2024, 'Tier 2', 'shift-1', 1, 'quantitative-aptitude',
+  ('cgl', 2024, 'Tier 2', 'shift-3', 1, 'quantitative-aptitude',
     '<p>What is the compound interest on 10000 rupees at 10 percent per annum for 2 years, compounded annually?</p>',
     '<p>CI = 10000 x 1.1 x 1.1 - 10000 = 2100.</p>', 3),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 2, 'english',
+  ('cgl', 2024, 'Tier 2', 'shift-3', 2, 'english',
     '<p>Choose the correct synonym of Abundant.</p>',
     '<p>Plentiful is the closest synonym.</p>', 1),
 
@@ -139,15 +150,15 @@ from (values
   ('cgl', 2024, 'Tier 1', 'shift-2', 3, 'C', '<p>1935</p>', false, 3),
   ('cgl', 2024, 'Tier 1', 'shift-2', 3, 'D', '<p>1942</p>', false, 4),
 
-  ('cgl', 2024, 'Tier 2', 'shift-1', 1, 'A', '<p>2000 rupees</p>', false, 1),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 1, 'B', '<p>2100 rupees</p>', true, 2),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 1, 'C', '<p>2200 rupees</p>', false, 3),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 1, 'D', '<p>2500 rupees</p>', false, 4),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 1, 'A', '<p>2000 rupees</p>', false, 1),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 1, 'B', '<p>2100 rupees</p>', true, 2),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 1, 'C', '<p>2200 rupees</p>', false, 3),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 1, 'D', '<p>2500 rupees</p>', false, 4),
 
-  ('cgl', 2024, 'Tier 2', 'shift-1', 2, 'A', '<p>Scarce</p>', false, 1),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 2, 'B', '<p>Plentiful</p>', true, 2),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 2, 'C', '<p>Limited</p>', false, 3),
-  ('cgl', 2024, 'Tier 2', 'shift-1', 2, 'D', '<p>Rare</p>', false, 4),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 2, 'A', '<p>Scarce</p>', false, 1),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 2, 'B', '<p>Plentiful</p>', true, 2),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 2, 'C', '<p>Limited</p>', false, 3),
+  ('cgl', 2024, 'Tier 2', 'shift-3', 2, 'D', '<p>Rare</p>', false, 4),
 
   ('cgl', 2023, 'Tier 1', 'shift-1', 1, 'A', '<p>5 percent</p>', true, 1),
   ('cgl', 2023, 'Tier 1', 'shift-1', 1, 'B', '<p>10 percent</p>', false, 2),
