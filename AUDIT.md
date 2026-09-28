@@ -101,10 +101,38 @@ mitigated with `estimated` count on the `questions` table.
 already fixed by consolidating into one query. Neither workaround was
 removed.
 
-**Deferred**: Phase 1 also asks for an automated test that fails if a short
-common search term errors or times out. There's no test runner in this repo
-yet (that's Phase 5). Tracked to be added once Vitest is wired up, not
-forgotten.
+**Retry hardening (explicit follow-up)**: the retry-on-57014 alone wasn't
+an acceptable resting state per se — it needed a bound, a backoff, and
+logging so a real ongoing problem can't hide behind "it retried
+successfully." `withTimeoutRetry()` now does exactly one retry after a
+250ms backoff, logs every timeout when it happens (labeled by call site),
+and logs an **error** (not just a warning) if the retry also times out —
+two-in-a-row is the signal this stopped being a one-off.
+
+**New live evidence (Phase 2)**: while building the static-rendering pages,
+`getSubjectsForExam()` (a *different* query from the original search
+finding) 57014'd on a real request for a real exam ("steno") — caught by
+the new logging, not by luck. Root cause here is directly visible in the
+query, independent of the compute-tier theory above: it fetches one row
+per matching **question** (unbounded, and until this fix had no
+`is_published` filter) just to dedupe down to ~5 distinct subjects in JS,
+instead of asking Postgres for the distinct rows directly. Added the
+missing `is_published` filter (safe, applied immediately). The complete
+fix — push the `DISTINCT` into Postgres via an RPC function, the same
+pattern `get_leaderboard` already uses — needs a migration and is flagged
+for your call, not applied unilaterally. **This means H4 may not be a
+single root cause** — the original search-timeout finding (query itself
+fast, likely a genuine Free-tier resource constraint) and this
+newly-found query-shape inefficiency are independent problems that happen
+to share an error code.
+
+**Deferred**: Phase 1 also asks for an automated test that fails if a
+short common search term errors or times out. Vitest now exists in this
+repo (added in Phase 2 for the public-client regression test), but a
+*meaningful* version of this test needs a real database connection to
+actually catch a timeout regression — mocking the client wouldn't test
+anything real. That's squarely what Phase 5's local-Supabase test
+infrastructure is for; tracked there, not forgotten.
 
 ### Medium
 
@@ -134,7 +162,7 @@ forgotten.
 | A2 | No self-service "forgot password" flow (Supabase supports `resetPasswordForEmail`; there's just no UI for it) and no account-deletion flow. Neither is a bug — the brief's Security section is about hardening what exists, not adding auth surface area — but a user who forgets their password today has no way back in except via Google sign-in. Flagging as a product decision, not building it unprompted. |
 | A3 | `LoginForm`/`SignupForm` call `supabase.auth.signInWithPassword` / `signUp` directly from the browser, bypassing the app's own `rate-limit.ts`. This is very likely fine — Supabase's hosted Auth service (GoTrue) does its own server-side rate limiting on these endpoints — but I can't verify your project's Supabase rate-limit configuration from here, so I'm noting it rather than asserting it's covered. Worth a 5-minute check in your Supabase dashboard (Auth → Rate Limits). |
 
-### A1 — static/ISR rendering (Phase 2, resolved for most public pages)
+### A1 — static/ISR rendering (Phase 2 — now resolved for all public pages)
 
 **Was**: every route rendered fully dynamically, even though ~10 pages
 declared `export const revalidate = 300`. Root cause: `layout.tsx` called
@@ -143,39 +171,84 @@ auth state, and in Next's current (non-Cache-Components) model, any
 cookie/header read anywhere in a route's tree forces that whole route
 dynamic.
 
-**Fixed**: verified empirically that the layout fix alone was not enough —
-every public page's own data-fetching functions *also* called the
-cookie-aware client. Introduced a second, cookie-free `createPublicClient()`
-(`src/lib/supabase/public.ts`) for catalog reads (safe: those tables' RLS
-policies never depend on `auth.uid()`), moved Header/MobileNav/MobileMenu's
-auth-awareness to a client-side check with a neutral loading placeholder,
-and gave static pages a verified-necessary `'self' 'unsafe-inline'` CSP
-(nonce-based CSP doesn't work for statically rendered pages — see the Phase
-2 commit message for what was verified and how). Dynamic per-user pages
-(login/signup/dashboard/bookmarks/profile/search) keep the original
+**Fix, part 1 — the cookie-free client.** Verified empirically that the
+layout fix alone was not enough — every public page's own data-fetching
+functions *also* called the cookie-aware client. Introduced a second,
+cookie-free `createPublicClient()` (`src/lib/supabase/public.ts`) for
+catalog reads (safe: those tables' RLS policies never depend on
+`auth.uid()`), moved Header/MobileNav/MobileMenu's auth-awareness to a
+client-side check with a neutral loading placeholder, and gave static
+pages a verified-necessary `'self' 'unsafe-inline'` CSP (nonce-based CSP
+doesn't work for statically rendered pages — verified in a real browser:
+Next injects multiple inline RSC-payload scripts per page that can't be
+hash-listed). Dynamic per-user pages (login/signup/forgot-reset-password/
+dashboard/bookmarks/profile/search/auth-callback) keep the original
 nonce + `strict-dynamic` CSP unchanged.
 
-**Result**: `/`, `/practice`, `/ssc`, `/books`, `/sitemap.xml` now render
-statically/ISR.
+**Fix, part 2 — a second, independent blocker.** Even after part 1,
+`/ssc/[exam]` (which reads no `searchParams` at all) *still* rendered fully
+dynamic. Verified via `curl`: a dynamic-segment route with no
+`generateStaticParams` at all — regardless of Dynamic API usage — never
+gets on-demand ISR caching; the `dynamicParams: true` fallback only
+activates for a route that has already opted in via `generateStaticParams`.
+An **empty** `generateStaticParams()` (zero build-time queries, so no
+concurrent-load risk) is enough: confirmed via `Cache-Control` headers —
+first request to an unlisted param gets `s-maxage=300` and renders in
+~1.1s, second request serves from cache in ~10ms.
 
-**Still dynamic, for a different and independent reason**: `/ssc/[exam]`,
-`/ssc/[exam]/pyq`, `/ssc/[exam]/pyq/[year]`, `/ssc/[exam]/pyq/[year]/[shift]`,
-and `/practice/[subject]` remain `ƒ`. Four of these five read `searchParams`
-(tier/subject/year/question-number filters) — under the current rendering
-model, that alone forces per-request rendering regardless of the cookie
-fix. This is exactly the kind of thing full Cache Components (PPR) is built
-to solve (a static shell with a `searchParams`-dependent dynamic hole) —
-flagging it rather than pursuing that migration unprompted, since it's the
-same scope of change the original A1 finding already declined to make
-unilaterally.
+**Fix, part 3 — the searchParams-driven pages.** `/ssc/[exam]/pyq`(+`[year]`,
++`[shift]`) and `/practice/[subject]` also read `searchParams` server-side,
+which forces dynamic rendering independently of the above. Moved filter
+reading into client components, each following the same shape: the page
+renders the default (unfiltered) view statically via the same empty-
+`generateStaticParams` technique, and a client component reads the URL
+(isolated into a shared, tiny `SearchParamsBridge` so only it — not the
+visible UI — is subject to the Suspense-deferred-to-client rendering
+`useSearchParams()` requires on a static page) and fetches filtered data
+from a new small, rate-limited, Zod-validated public API route when the
+URL differs from the default. Canonical URLs were verified safe to do this
+for *before* touching the shift page specifically (its `generateMetadata`
+never varied by `searchParams` — always the base URL — so there was no
+self-canonicalized per-question SEO content to lose).
 
-**Also discovered**: pre-rendering every exam via `generateStaticParams`
-concentrates enough concurrent build-time load to hit the same 57014
-statement-timeout as H4, and concretely failed a build (`/ssc/gd`).
-Deliberately did not add `generateStaticParams` for this reason — a build
-failure is worse than a page rendering (and then ISR-caching) on first
-real request. Added the H4 retry pattern to every public catalog read as a
-general resilience improvement, which also makes this more robust.
+**Result — confirmed via `npm run build`**: every public page is now
+`○` (static) or `●` (SSG/on-demand ISR). Only genuinely per-user pages
+remain `ƒ`: `/dashboard`, `/bookmarks`, `/profile`, `/login`, `/signup`,
+`/search`, `/leaderboard`, `/auth/callback`, and the `/api/**` routes.
+
+**Verified in a real browser, not just by the build output**: added a
+Playwright suite (`e2e/`) covering all three page groups — default static
+view, applying a filter, sharing/reloading a filtered URL, and back/forward
+navigation, on both desktop and a 375px mobile viewport. 22 passed, 6
+skipped gracefully (exams/years with no second tier in the current data).
+Building this against a live browser caught two real bugs before they
+shipped: `getSubjectsForExam()` had no `is_published` filter and fetched
+one row per question just to dedupe to a handful of subjects in JS — it
+57014'd live, on a real exam ("steno"), mid-testing (see H4 below); and a
+new API route's `.strict()` Zod schema was checked against a hand-picked
+`{subject, q}` object instead of the real query string, so `.strict()`
+never actually saw an unexpected param to reject.
+
+**Also discovered**: pre-rendering every exam via a *non-empty*
+`generateStaticParams` concentrates enough concurrent build-time load to
+hit the same 57014 statement-timeout as H4, and concretely failed a build
+(`/ssc/gd`). The empty-array version (part 2 above) avoids this — it does
+zero build-time queries — which is why that's what shipped instead.
+
+#### Future work noted, not built this pass
+
+- **Tier as a path segment.** Exam+year is already a path segment
+  (`/ssc/[exam]/pyq/[year]`); `tier` (e.g. "SSC CGL 2024 Tier 1") is a real,
+  distinct search pattern that could be its own indexable URL instead of a
+  query param. Not done now — it's a URL-structure change needing 301s
+  from any already-indexed `?tier=` URLs, a separate SEO project from a
+  rendering-mode fix.
+- **Per-question indexable URLs.** Every question currently lives only at
+  `.../[shift]?q=N` (a query param, not indexed as distinct content beyond
+  the base paper URL). Worth evaluating whether individual questions have
+  enough standalone search value (long-tail "SSC CGL 2024 quant question
+  17" style queries) to warrant their own path-based URL, separate from
+  the practice-navigation UX this pass optimized.
 
 ---
 
