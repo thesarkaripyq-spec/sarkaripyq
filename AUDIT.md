@@ -182,8 +182,8 @@ infrastructure is for; tracked there, not forgotten.
 
 | # | Finding | Why I didn't just fix it |
 |---|---|---|
-| A2 | No self-service "forgot password" flow (Supabase supports `resetPasswordForEmail`; there's just no UI for it) and no account-deletion flow. Neither is a bug — the brief's Security section is about hardening what exists, not adding auth surface area — but a user who forgets their password today has no way back in except via Google sign-in. Flagging as a product decision, not building it unprompted. |
-| A3 | `LoginForm`/`SignupForm` call `supabase.auth.signInWithPassword` / `signUp` directly from the browser, bypassing the app's own `rate-limit.ts`. This is very likely fine — Supabase's hosted Auth service (GoTrue) does its own server-side rate limiting on these endpoints — but I can't verify your project's Supabase rate-limit configuration from here, so I'm noting it rather than asserting it's covered. Worth a 5-minute check in your Supabase dashboard (Auth → Rate Limits). |
+| A2 | No self-service "forgot password" flow (Supabase supports `resetPasswordForEmail`; there's just no UI for it) and no account-deletion flow. Neither is a bug — the brief's Security section is about hardening what exists, not adding auth surface area — but a user who forgets their password today has no way back in except via Google sign-in. | **Fixed (Phase 3)** — see "Auth completeness (Phase 3)" below for both flows and the reasoning behind each. |
+| A3 | `LoginForm`/`SignupForm` call `supabase.auth.signInWithPassword` / `signUp` directly from the browser, bypassing the app's own `rate-limit.ts`. This is very likely fine — Supabase's hosted Auth service (GoTrue) does its own server-side rate limiting on these endpoints — but I can't verify your project's Supabase rate-limit configuration from here, so I'm noting it rather than asserting it's covered. | **Guidance given, not fixable from here** — see "Auth completeness (Phase 3)" below for the exact dashboard location to check and what to set. Turnstile CAPTCHA is available as an additional layer but needs a decision from you (see below) since it requires a Cloudflare account. |
 
 ### A1 — static/ISR rendering (Phase 2 — now resolved for all public pages)
 
@@ -273,6 +273,90 @@ zero build-time queries — which is why that's what shipped instead.
   17" style queries) to warrant their own path-based URL, separate from
   the practice-navigation UX this pass optimized.
 
+### Auth completeness (Phase 3)
+
+**Forgot password.** New flow, all four pieces:
+
+- `src/app/forgot-password/page.tsx` + `ForgotPasswordForm.tsx` — email
+  input, POSTs to a new route.
+- `src/app/api/auth/forgot-password/route.ts` — same-origin check,
+  Zod `.strict()` email validation, **two** rate limits: 5/min per IP
+  (returns 429 — this one's fine to reveal, it's about abuse, not the
+  target account) and 3/10min per email address (silently no-ops instead
+  of erroring, so it can't be used to distinguish "you're rate-limited"
+  from "that account doesn't exist"). On success calls
+  `supabase.auth.resetPasswordForEmail(email, { redirectTo:
+  "/auth/callback?next=/reset-password" })` — reusing the OAuth
+  callback's existing code-exchange and `safeNextPath()` validation
+  (H2's fix) rather than building a second redirect handler with its own
+  chance of the same open-redirect bug.
+- `src/app/reset-password/page.tsx` — server component, checks
+  `supabase.auth.getUser()`. A valid session (established by the
+  callback route from the emailed link) shows `ResetPasswordForm`; no
+  session shows "this link is invalid or expired" with a link back to
+  `/forgot-password`, instead of a broken form.
+- `src/components/auth/ResetPasswordForm.tsx` — client component, min 8
+  chars, confirm-password match, calls
+  `supabase.auth.updateUser({ password })` on the browser client.
+- Response wording is identical whether or not the email has an account
+  ("If an account exists for **{email}**, we've sent a link...") — no
+  enumeration signal anywhere in this flow.
+- Added `Link href="/forgot-password"` next to the password field in
+  `LoginForm.tsx`.
+- `robots.ts` already disallowed `/forgot-password` and
+  `/reset-password`; `proxy.ts` already had both in
+  `DYNAMIC_PATH_PREFIXES` from Phase 2 — both anticipated this work, no
+  changes needed there.
+
+**Account deletion.** New flow, three pieces:
+
+- `src/app/api/profile/delete/route.ts` — same-origin check, 3/min per-IP
+  rate limit, `getUser()` auth check, then
+  `createAdminClient().auth.admin.deleteUser(user.id)`. Deleting the
+  `auth.users` row is the *entire* fix — no manual per-table deletes —
+  because `profiles`, `bookmarks`, and `practice_attempts` all reference
+  it `on delete cascade`, and `question_reports.user_id` is
+  `on delete set null` (verified against `supabase/migrations/0001_init.sql`
+  and `0002_reports.sql`, not assumed).
+- `src/components/auth/DeleteAccountButton.tsx` — mirrors
+  `ResetProgressButton`'s confirm-step shape, but with a stricter
+  "type DELETE to confirm" text input rather than just a second click,
+  since this is irreversible in a way progress-reset isn't. Signs out
+  the browser client and redirects home on success.
+- Wired into `/profile/page.tsx` as a clearly separated danger-zone card.
+- **Not live-tested against a real Supabase user** — deliberately.
+  Deleting a real account isn't something to rehearse against
+  production data from here. Reviewed thoroughly instead (same
+  cascade/rate-limit/auth-check pattern as the already-live
+  `profile/reset` route); please test it yourself with a disposable
+  account before considering this done.
+
+**A3 — Supabase Auth rate limits, exact dashboard location.** Dashboard →
+Authentication → Rate Limits. Check "Sign in with password" and "Send
+recovery" specifically (the latter matters more now that
+`resetPasswordForEmail` is wired up) — both are separate from this app's
+own `rate-limit.ts`, which only covers this app's own API routes, not
+GoTrue's own endpoints that `LoginForm`/`SignupForm`/`ForgotPasswordForm`
+call directly from the browser. Also check Authentication → Email
+Templates → "Reset Password" — it needs to exist and point at
+`{{ .SiteURL }}/auth/callback?next=/reset-password` (Supabase's default
+template already uses `{{ .ConfirmationURL }}`, which is correct here
+too since we pass `redirectTo` in the API call above; just confirm it
+hasn't been customized to point somewhere else).
+
+**Turnstile CAPTCHA — flagged, not built.** This was listed as optional
+in the brief, and needs a decision I can't make for you: Supabase
+supports it natively (`captchaToken` on `signInWithPassword`/`signUp`/
+`resetPasswordForEmail`, no custom server-side verification code needed
+on this app's side), but it requires **your** Cloudflare account to
+create a Turnstile site, and the widget is a third-party script that
+would need to be added to the CSP's `script-src` on `/login`, `/signup`,
+and `/forgot-password` specifically. Not built because: (a) it needs
+credentials only you can create, and (b) whether it's worth the extra
+CSP surface area is a product call, not something to guess at. If you
+want it, say so and provide the site key/secret (as env vars, never
+pasted into chat) and I'll wire it up — small, contained change.
+
 ---
 
 ## Already solid — verified, not touched
@@ -350,19 +434,29 @@ Lighthouse scores. See the manual checklist below.
    I have no way to do this from here. Given the audit above, I'd expect
    Performance to be the only category not already in the 90s (mainly
    because of A1 — everything server-renders per request).
-3. **Decide on A1** (dynamic-everything rendering) — tell me if you want a
-   follow-up pass adopting `cacheComponents`, or if this is fine at your
-   current traffic level.
-4. **Decide on A2** (forgot-password / account deletion) — say if you want
-   these built.
-5. **Check Supabase Auth rate limits** (A3) in your Supabase dashboard.
-6. **Submit `sitemap.xml` in Google Search Console / Bing Webmaster Tools**
+3. ~~Decide on A1~~ — **done**: A1 (dynamic-everything rendering) was
+   resolved in Phase 2, see above. No decision needed from you here.
+4. ~~Decide on A2~~ — **done**: forgot-password and account deletion are
+   both built, see "Auth completeness (Phase 3)" above. Please test
+   account deletion yourself with a disposable account — I deliberately
+   didn't run it against a real user from here.
+5. **Check Supabase Auth rate limits and email template (A3)** —
+   Dashboard → Authentication → Rate Limits (check "Sign in with
+   password" and "Send recovery") and Authentication → Email Templates
+   → "Reset Password" (confirm it hasn't been customized away from
+   `{{ .ConfirmationURL }}`). Exact reasoning in "Auth completeness
+   (Phase 3)" above.
+6. **Decide on Turnstile CAPTCHA** — optional per the brief, not built.
+   Needs your Cloudflare account to create a site key/secret. See
+   "Auth completeness (Phase 3)" above for exactly what it would touch
+   if you want it.
+7. **Submit `sitemap.xml` in Google Search Console / Bing Webmaster Tools**
    after this deploys — nothing changed about the sitemap's correctness,
    but if you haven't submitted it yet, this is the moment.
-7. **Verify CSP in production before relying on it** — `strict-dynamic`
+8. **Verify CSP in production before relying on it** — `strict-dynamic`
    CSPs are occasionally stricter than expected with third-party embeds. If
    you ever add Google Analytics/GTM/an ad script, it needs to read the
    nonce from `headers()` and pass it explicitly (pattern is in
    `node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md`).
-8. **No environment variables need to change** — `.env.example` already
+9. **No environment variables need to change** — `.env.example` already
    matches what the app reads; nothing in this pass added new config.
