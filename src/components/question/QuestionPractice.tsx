@@ -34,6 +34,19 @@ export function QuestionPractice({
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
 
+  // "Adjusting state during render" (react.dev/reference/react/useState) -
+  // not an effect, so it takes effect in the same commit, before children
+  // (Option) render with stale selection/reveal state. Resets on every
+  // question change, not just goTo() clicks - also covers the question
+  // changing via a parent state update driven by the URL (shared/reloaded
+  // filtered link, browser back/forward).
+  const [renderedQuestionId, setRenderedQuestionId] = useState(question.id);
+  if (question.id !== renderedQuestionId) {
+    setRenderedQuestionId(question.id);
+    setSelectedOptionId(null);
+    setRevealed(false);
+  }
+
   const index = questionNumbers.indexOf(currentQuestionNumber);
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < questionNumbers.length - 1;
@@ -47,10 +60,8 @@ export function QuestionPractice({
   function goTo(questionNumber: number) {
     const params = new URLSearchParams(query);
     params.set("q", String(questionNumber));
-    setSelectedOptionId(null);
-    setRevealed(false);
     startTransition(() => {
-      router.push(`${basePath}?${params.toString()}`);
+      router.push(`${basePath}?${params.toString()}`, { scroll: false });
     });
   }
 

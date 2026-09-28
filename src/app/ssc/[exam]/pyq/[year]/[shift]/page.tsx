@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getExamBySlug, getPaperBySlug, getSubjectBySlug, getSubjectsForExam } from "@/lib/data/exams";
+import { getExamBySlug, getPaperBySlug, getSubjectsForExam } from "@/lib/data/exams";
 import { getQuestionByPaperAndNumber, getQuestionNumbersForPaper } from "@/lib/data/questions";
-import { SubjectTabs } from "@/components/exam/SubjectTabs";
-import { QuestionPractice } from "@/components/question/QuestionPractice";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { PracticeSession } from "@/components/question/PracticeSession";
 import { formatExamDate, siteUrl } from "@/lib/utils";
 import { safeJsonLd } from "@/lib/json-ld";
 
@@ -12,7 +10,17 @@ export const revalidate = 300;
 
 interface Props {
   params: Promise<{ exam: string; year: string; shift: string }>;
-  searchParams: Promise<{ q?: string; subject?: string }>;
+}
+
+// Empty on purpose - see src/app/ssc/[exam]/page.tsx for why this alone
+// (zero build-time queries) is enough to unlock on-demand ISR caching.
+// The ?subject=/?q= filters (previously read server-side here) are now
+// handled entirely client-side by PracticeSession - this page always
+// renders the default, unfiltered, first-question view, which is also
+// the canonical URL (generateMetadata below never varied by
+// searchParams, so this was already what got indexed).
+export async function generateStaticParams() {
+  return [];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -29,9 +37,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ShiftPracticePage({ params, searchParams }: Props) {
+export default async function ShiftPracticePage({ params }: Props) {
   const { exam: examSlug, year, shift } = await params;
-  const { q, subject: subjectSlug } = await searchParams;
   const yearNum = Number(year);
 
   const exam = await getExamBySlug(examSlug);
@@ -40,36 +47,19 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
   const paper = await getPaperBySlug(exam.id, yearNum, shift);
   if (!paper) notFound();
 
-  const [subjects, subjectFilter] = await Promise.all([
-    getSubjectsForExam(exam.id),
-    subjectSlug ? getSubjectBySlug(subjectSlug) : Promise.resolve(null),
-  ]);
-
-  const questionList = await getQuestionNumbersForPaper(paper.id, subjectFilter?.id);
-  const questionNumbers = questionList.map((item) => item.question_number);
-
   const basePath = `/ssc/${exam.slug}/pyq/${year}/${shift}`;
 
-  if (questionNumbers.length === 0) {
-    return (
-      <div className="mx-auto max-w-content px-4 py-8">
-        <SubjectTabs subjects={subjects} activeSlug={subjectFilter?.slug ?? null} basePath={basePath} />
-        <div className="py-6">
-          <EmptyState
-            title="No questions match this filter"
-            description="Try a different subject, or view all questions."
-          />
-        </div>
-      </div>
-    );
-  }
+  // Always the default, unfiltered view - see the generateStaticParams
+  // comment above. Subject filtering and question navigation are handled
+  // entirely client-side from here (PracticeSession).
+  const [subjects, questionList] = await Promise.all([
+    getSubjectsForExam(exam.id),
+    getQuestionNumbersForPaper(paper.id),
+  ]);
+  const questionNumbers = questionList.map((item) => item.question_number);
 
-  const firstQuestionNumber = questionNumbers[0]!;
-  const requestedQ = q ? Number(q) : firstQuestionNumber;
-  const currentQuestionNumber = questionNumbers.includes(requestedQ) ? requestedQ : firstQuestionNumber;
-
-  const question = await getQuestionByPaperAndNumber(paper.id, currentQuestionNumber);
-  if (!question) notFound();
+  const firstQuestionNumber = questionNumbers[0] ?? null;
+  const question = firstQuestionNumber !== null ? await getQuestionByPaperAndNumber(paper.id, firstQuestionNumber) : null;
 
   const subtitleParts = [paper.exam_date ? formatExamDate(paper.exam_date) : null, paper.shift].filter(
     Boolean,
@@ -92,17 +82,19 @@ export default async function ShiftPracticePage({ params, searchParams }: Props)
         dangerouslySetInnerHTML={{ __html: safeJsonLd(breadcrumbJsonLd) }}
       />
       <h1 className="sr-only">
-        {paper.title} {subtitleParts.join(" • ")} — Question {currentQuestionNumber}
+        {paper.title} {subtitleParts.join(" • ")}
+        {firstQuestionNumber !== null ? ` — Question ${firstQuestionNumber}` : ""}
       </h1>
-      <SubjectTabs subjects={subjects} activeSlug={subjectFilter?.slug ?? null} basePath={basePath} />
-      <QuestionPractice
+      <PracticeSession
+        paperId={paper.id}
         basePath={basePath}
         paperTitle={paper.title}
         paperSubtitle={subtitleParts.length ? subtitleParts.join(" • ") : null}
-        questionNumbers={questionNumbers}
-        currentQuestionNumber={currentQuestionNumber}
-        question={question}
-        subjectQuery={subjectFilter?.slug ?? null}
+        subjects={subjects}
+        initialSubjectSlug={null}
+        initialQuestionNumbers={questionNumbers}
+        initialCurrentQuestionNumber={firstQuestionNumber}
+        initialQuestion={question}
       />
     </div>
   );

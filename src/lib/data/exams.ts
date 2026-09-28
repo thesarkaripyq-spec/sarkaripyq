@@ -131,12 +131,20 @@ export async function getPaperBySlug(
 
 export async function getSubjectsForExam(examId: string): Promise<Subject[]> {
   const supabase = createPublicClient();
+  // NOTE: this still fetches one row per matching question (deduped to
+  // distinct subjects in JS below), not per distinct subject - the
+  // is_published filter narrows it, but doesn't fix the underlying shape.
+  // Caught this live (see AUDIT.md H4): this exact query 57014'd on a
+  // large exam ("steno") mid-testing. A real fix pushes the DISTINCT into
+  // Postgres via an RPC (like get_leaderboard already does) instead of
+  // transferring every question row just to dedupe ~5 subjects in JS.
   const { data, error } = await withTimeoutRetry(
     () =>
       supabase
         .from("questions")
         .select("subjects!inner(id, slug, name, display_order), papers!inner(exam_id)")
         .eq("papers.exam_id", examId)
+        .eq("is_published", true)
         .returns<{ subjects: Subject }[]>(),
     "exams.getSubjectsForExam",
   );
