@@ -7,7 +7,16 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/login", "/signup", "/profile", "/dashboard", "/bookmarks"],
+        disallow: [
+          "/api/",
+          "/login",
+          "/signup",
+          "/forgot-password",
+          "/reset-password",
+          "/profile",
+          "/dashboard",
+          "/bookmarks",
+        ],
       },
       // Content-scraping bots that ignore crawl-delay/robots conventions on
       // most sites still choose to respect an explicit disallow far more

@@ -53,9 +53,14 @@ export function LoginForm() {
           />
         </div>
 
-        <label htmlFor="password" className="text-sm font-medium text-ink-700">
-          Password
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="password" className="text-sm font-medium text-ink-700">
+            Password
+          </label>
+          <Link href="/forgot-password" className="text-xs font-medium text-brand-600 hover:text-brand-700">
+            Forgot password?
+          </Link>
+        </div>
         <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
           <Lock size={16} className="text-ink-300" aria-hidden />
           <input
