@@ -6,7 +6,6 @@ import { PageHero } from "@/components/layout/PageHero";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How SarkariPYQ collects, uses, and protects your data.",
-  robots: { index: false },
   alternates: { canonical: "/privacy" },
 };
 

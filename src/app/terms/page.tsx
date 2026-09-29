@@ -6,7 +6,6 @@ import { PageHero } from "@/components/layout/PageHero";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The terms that govern your use of SarkariPYQ.",
-  robots: { index: false },
   alternates: { canonical: "/terms" },
 };
 

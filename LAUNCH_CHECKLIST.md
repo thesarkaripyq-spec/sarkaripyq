@@ -177,24 +177,15 @@ Also confirm the "Reset Password" email template still points at
 `{{ .ConfirmationURL }}` (Authentication → Email Templates) and hasn't
 been customized away from it.
 
-## 5. Replace the legal page placeholders
+## 5. ~~Replace the legal page placeholders~~ — done
 
-`/privacy` and `/terms` are built (routes, metadata, footer links) but
-carry a prominent "DRAFT — not legal advice" banner and placeholder
-text for anything requiring real legal judgment (liability limits,
-governing law, cookie policy specifics, data-subject rights under
-India's DPDP Act). The factual sections (what data is actually
-collected, per the code) are already filled in accurately — only the
-legal-judgment sections need real content.
-
-**What to do**: either write the real policy text yourself, or have it
-reviewed by someone familiar with applicable law, then replace the
-`[Placeholder]` sections in `src/app/privacy/page.tsx` and
-`src/app/terms/page.tsx` and flip `robots: { index: false }` to allow
-indexing once the real content is in place. Add both URLs to
-`sitemap.ts` at that point too (currently excluded on purpose, since
-listing noindexed placeholder pages there would contradict the
-noindex directive).
+`/privacy` and `/terms` now carry real policy text (no more DRAFT
+banner), `robots: { index: false }` has been removed from both, and
+both are now listed in `sitemap.ts`. If the content hasn't been
+reviewed by someone familiar with applicable law (liability limits,
+governing law, data-subject rights under India's DPDP Act), that's
+still worth doing before launch — but the placeholder/indexing
+mechanics are done.
 
 ## 6. Turn on CI
 
