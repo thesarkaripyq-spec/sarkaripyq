@@ -37,9 +37,11 @@ const SHARED_DIRECTIVES = [
   // No external image host needs to be allowed here anymore.
   "img-src 'self' data: https://*.supabase.co",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co",
+  // Google Analytics (gtag.js, loaded via @next/third-parties/google):
+  // region1.google-analytics.com is the region-specific collect endpoint
+  // GA can redirect to depending on where the request originates - both
+  // are needed, not just the bare one.
   "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://region1.google-analytics.com",
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -51,11 +53,25 @@ const SHARED_DIRECTIVES = [
 // inserted by a nonced script) can run - Next.js auto-attaches the nonce to
 // its own framework/page bundles automatically (by parsing this header),
 // so nothing in these routes needs to read the nonce explicitly.
+//
+// Known gap: the https://www.googletagmanager.com host-source below (per
+// Next's own CSP docs example) is a fallback for browsers that don't
+// support strict-dynamic - per the CSP3 spec, browsers that DO support it
+// ignore host-source entries here entirely. GoogleAnalytics (rendered
+// unconditionally in the root layout) is therefore not guaranteed to fire
+// on this file's DYNAMIC_PATH_PREFIXES routes (login/signup/dashboard/
+// etc.) in modern browsers, only on every other (STATIC_CSP) route, which
+// covers all real content/traffic pages. Fixing this fully would mean
+// reading the nonce via next/headers and passing it as GoogleAnalytics's
+// nonce prop - deliberately not done here, since the root layout wraps
+// every route and any Dynamic API call there forces the entire site out
+// of static/ISR rendering (see AUDIT.md A1/Phase 2). Not worth that
+// trade for analytics coverage on a handful of already-utility pages.
 function buildDynamicCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com${isDev ? " 'unsafe-eval'" : ""}`,
     ...SHARED_DIRECTIVES.slice(1),
   ].join("; ");
 }
@@ -74,7 +90,7 @@ function buildDynamicCsp(nonce: string): string {
 // don't execute it as JS.
 const STATIC_CSP = [
   SHARED_DIRECTIVES[0],
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://www.googletagmanager.com${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
   ...SHARED_DIRECTIVES.slice(1),
 ].join("; ");
 
