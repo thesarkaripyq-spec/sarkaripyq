@@ -1,10 +1,52 @@
 # SarkariPYQ — Launch Checklist
 
-Started during Phase 5 (testing) because it surfaced a real launch
-blocker; will grow through Phase 6. Each item says what to do and,
-where it matters, exactly why.
+Everything left before this goes live, in the order it makes sense to
+tackle it. Each item says what to do and, where it matters, exactly
+why. See `AUDIT.md` for the full reasoning behind anything summarized
+here.
 
-## Email: custom SMTP is required before launch
+## 1. Resolve H4 (search statement timeouts) — root cause still open
+
+The mitigation (raised `anon` statement timeout, a logged one-time
+retry) already shipped, but the actual question — is this a genuine
+Supabase Free-tier resource constraint, or something else? — is still
+unanswered. Four attempts to get the real `EXPLAIN (ANALYZE, BUFFERS)`
+/ `pg_stat` output (Blocks A–D from the original diagnosis request)
+all arrived as unfilled template placeholders rather than real data.
+
+**What to do**: run the diagnostic queries in `AUDIT.md`'s H4 section
+against your production database (Supabase Dashboard → SQL Editor) and
+send back the actual output — numbers or a screenshot, not the
+template. Ranked fix options (most likely: upgrade compute tier, if
+it's confirmed as a resource constraint) can only be given once this
+is real.
+
+## 2. Adopt the Supabase CLI for production migrations
+
+Prepared, not run — deferred at your request until after Phase 5,
+which just finished, so this is ready whenever you want to do it.
+`supabase/config.toml` already exists (`supabase init` was run
+locally, safe/no network call). What's left needs **your** account and
+**you** to run the actual commands, since they write to the remote
+migration ledger:
+
+1. `supabase link --project-ref <production-project-ref>` — you type
+   the database password yourself when prompted.
+2. `supabase migration list` (read-only) — tells us whether the 9
+   existing `NNNN_name.sql` files are recognized as-is, or need
+   renaming to the CLI's timestamp convention first. See `AUDIT.md`'s
+   "adopting the Supabase CLI for migrations" section for exactly what
+   this will show and what to do with either outcome.
+3. `supabase migration repair <versions> --status applied` — marks
+   the 9 already-applied migrations as applied in the CLI's ledger
+   without re-running them.
+4. Once `supabase migration list` shows local and remote agreeing
+   with nothing pending, tell me — I'll remove
+   `scripts/run-migrations.mjs`/`db:migrate` and document
+   `supabase migration new` + `supabase db push` as the replacement
+   workflow.
+
+## 3. Set up custom SMTP
 
 **Why this is a hard requirement, not a nice-to-have**: Supabase
 Auth's built-in email service is hard-capped at **2 messages per
@@ -30,7 +72,7 @@ Brevo: 300/day free). Recommending **Resend** below as the primary
 walkthrough since it has an explicit "send with Supabase" integration
 guide; Brevo's steps are similar in shape.
 
-**1. Create a Resend account and verify a sending domain**
+**3a. Create a Resend account and verify a sending domain**
    - Sign up at resend.com (needs your own account — not something I
      can do for you).
    - Dashboard → Domains → Add Domain. Use a subdomain if you'd
@@ -53,11 +95,11 @@ guide; Brevo's steps are similar in shape.
      before moving on — an unverified domain will send, but land in
      spam or get rejected outright.
 
-**2. Create a Resend API key**
+**3b. Create a Resend API key**
    - Dashboard → API Keys → Create. Scope it to "Sending access" only
      — it doesn't need to read/manage anything else.
 
-**3. Enter the SMTP credentials in Supabase**
+**3c. Enter the SMTP credentials in Supabase**
    - Supabase Dashboard → Authentication → Emails → SMTP Settings
      (also reachable via Authentication → Settings → look for
      "Custom SMTP").
@@ -65,7 +107,7 @@ guide; Brevo's steps are similar in shape.
      - **Host**: `smtp.resend.com`
      - **Port**: `465`
      - **Username**: `resend` (literally that word, not your email)
-     - **Password**: the API key from step 2
+     - **Password**: the API key from step 3b
      - **Sender email**: an address `@` your verified sending domain
        (e.g. `no-reply@mail.sarkaripyq.com`) — using an unverified
        domain here will fail to send
@@ -77,13 +119,7 @@ guide; Brevo's steps are similar in shape.
      `supabase.auth.resetPasswordForEmail`/`signUp` and lets GoTrue
      handle the sending.
 
-**4. Raise the new (now-adjustable) rate limit if needed**
-   - Dashboard → Authentication → Rate Limits → the email-sending
-     limit now defaults to 30/hour (up from the hard 2/hour on the
-     built-in mailer) and can be raised further from this same page
-     if your traffic needs it.
-
-**5. Send a real test email and check deliverability**
+**3d. Send a real test email and check deliverability**
    - Trigger a real password reset against a mailbox you control and
      confirm it arrives (not just that Supabase returned success —
      GoTrue returns the same generic response whether or not sending
@@ -119,3 +155,102 @@ Same shape, different provider specifics:
   signup e2e test already tolerates the 2/hour cap by skipping rather
   than failing (see `AUDIT.md` Phase 5) — worth doing only if you want
   that specific test to actually complete regularly rather than skip.
+
+## 4. Check and set Supabase Auth rate limits
+
+Two separate things to check, both in Dashboard → Authentication →
+Rate Limits:
+
+- **The email-sending limit** (see item 3 above) — only meaningfully
+  adjustable *after* custom SMTP is configured. Once it is, it
+  defaults to 30/hour; raise it to whatever your expected signup/reset
+  volume needs.
+- **"Sign in with password" / "Sign up" request limits** — these are
+  separate from the email limit and from this app's own `rate-limit.ts`
+  (which only covers this app's own API routes, not GoTrue's own
+  endpoints that `LoginForm`/`SignupForm` call directly from the
+  browser). Confirm the defaults are still appropriate for your
+  expected traffic; the exact numbers aren't something I can verify
+  without dashboard access.
+
+Also confirm the "Reset Password" email template still points at
+`{{ .ConfirmationURL }}` (Authentication → Email Templates) and hasn't
+been customized away from it.
+
+## 5. Replace the legal page placeholders
+
+`/privacy` and `/terms` are built (routes, metadata, footer links) but
+carry a prominent "DRAFT — not legal advice" banner and placeholder
+text for anything requiring real legal judgment (liability limits,
+governing law, cookie policy specifics, data-subject rights under
+India's DPDP Act). The factual sections (what data is actually
+collected, per the code) are already filled in accurately — only the
+legal-judgment sections need real content.
+
+**What to do**: either write the real policy text yourself, or have it
+reviewed by someone familiar with applicable law, then replace the
+`[Placeholder]` sections in `src/app/privacy/page.tsx` and
+`src/app/terms/page.tsx` and flip `robots: { index: false }` to allow
+indexing once the real content is in place. Add both URLs to
+`sitemap.ts` at that point too (currently excluded on purpose, since
+listing noindexed placeholder pages there would contradict the
+noindex directive).
+
+## 6. Turn on CI
+
+`.github/workflows/ci.yml` is committed but won't run correctly until
+3 repository secrets exist (Settings → Secrets and variables →
+Actions): `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY`,
+`TEST_SUPABASE_SERVICE_ROLE_KEY` — the **test** project's values (the
+same ones in your local `.env.test`), never production's.
+
+## 7. Get real Lighthouse scores
+
+`npm run lighthouse` (config + mobile thresholds already set: 85+
+Performance, 90+ Accessibility, 90+ Best Practices, 95+ SEO) — I
+couldn't get a real run to complete in this environment because every
+attempt collided with a `next dev` server already running on the same
+port, contending over the same `.next/` build output. Run it yourself
+locally (with no other `next dev`/`next start` sharing the same
+directory), or add it to CI later once you're comfortable with the
+runtime cost. Fix anything that comes back under threshold before
+launch.
+
+## 8. Check your Supabase plan's actual backup/retention policy
+
+Dashboard → Database → Backups. This project is on the Free tier,
+which does not include continuous point-in-time recovery — check
+whatever daily/retention policy currently applies. I didn't state a
+specific number here since Supabase's free-tier backup terms are the
+kind of thing that changes over time.
+
+## 9. Confirm production environment variables are set wherever you deploy
+
+Not just `.env.local` — whatever hosting platform you choose needs all
+of `.env.example`'s variables set in its own environment configuration,
+**especially `SUPABASE_SERVICE_ROLE_KEY`**, which `src/instrumentation.ts`
+now enforces at boot (the server fails to start in production without
+it, rather than failing silently later at the moment someone tries to
+delete their account).
+
+## 10. Test account deletion yourself with a disposable account
+
+The `/api/profile/delete` → `admin.auth.deleteUser()` flow is built
+and e2e-tested against the test project, but was deliberately never
+run against a real production account from here — too destructive to
+rehearse against real data. Create a throwaway real account and delete
+it yourself before trusting this in production.
+
+## 11. Submit `sitemap.xml`
+
+Google Search Console / Bing Webmaster Tools, once this deploys.
+Nothing about the sitemap's correctness changed in this pass — if you
+haven't submitted it yet, this is the moment.
+
+## 12. Deployment
+
+Everything above should be done first. Deployment itself — choosing a
+host, configuring that host's own environment variables, DNS, TLS — is
+intentionally not detailed here: it was out of scope for this entire
+hardening/testing pass from the start, and deserves its own focused
+pass rather than being squeezed in as the last line of this checklist.
