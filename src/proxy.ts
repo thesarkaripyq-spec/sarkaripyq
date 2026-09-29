@@ -38,6 +38,8 @@ const SHARED_DIRECTIVES = [
   "img-src 'self' data: https://*.supabase.co",
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co",
+  "connect-src 'self' https://*.supabase.co https://www.google-analytics.com https://region1.google-analytics.com",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

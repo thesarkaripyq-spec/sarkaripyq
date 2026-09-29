@@ -6,6 +6,8 @@ import { MobileNav } from "@/components/layout/MobileNav";
 import { Footer } from "@/components/layout/Footer";
 import { siteUrl } from "@/lib/utils";
 import { safeJsonLd } from "@/lib/json-ld";
+import { GoogleAnalytics } from "@next/third-parties/google";
+
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -96,6 +98,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="min-h-[60vh] pb-16 md:pb-0">{children}</main>
         <Footer />
         <MobileNav />
+        {process.env.NEXT_PUBLIC_GA_ID ? (
+  <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />
+) : null}
       </body>
     </html>
   );
