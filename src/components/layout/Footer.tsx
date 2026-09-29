@@ -27,6 +27,9 @@ export function Footer() {
           <Link href="/terms" className="transition-colors hover:text-white">
             Terms of Service
           </Link>
+          <Link href="/contact" className="transition-colors hover:text-white">
+            Contact
+          </Link>
         </nav>
 
         <p className="mt-2 text-xs text-ink-500">
