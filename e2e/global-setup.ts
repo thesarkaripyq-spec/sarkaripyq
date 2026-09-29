@@ -20,12 +20,21 @@ export default function globalSetup(): void {
     );
   }
 
+  // dotenv's config() never overrides a variable already present in
+  // process.env, so in CI - where ci.yml's `env:` block injects these
+  // directly from repository secrets, and .env.test is gitignored and
+  // never checked out - this is a no-op rather than a failure: the vars
+  // are already there. Only treat a load failure as fatal when nothing
+  // has supplied the required var from anywhere.
   const result = config({ path: ".env.test" });
-  if (result.error) {
-    throw new Error(`Refusing to run e2e tests: couldn't load .env.test (${result.error.message}).`);
+  if (result.error && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error(
+      `Refusing to run e2e tests: couldn't load .env.test (${result.error.message}), and ` +
+        `NEXT_PUBLIC_SUPABASE_URL isn't set some other way either (e.g. CI secrets).`,
+    );
   }
 
-  const url = result.parsed?.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   if (!url.includes(TEST_PROJECT_REF)) {
     throw new Error(
       `Refusing to run e2e tests: .env.test's NEXT_PUBLIC_SUPABASE_URL does not match ` +
