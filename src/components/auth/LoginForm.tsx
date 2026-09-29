@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Lock, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleButton } from "@/components/auth/GoogleButton";
+import { AuthField } from "@/components/auth/AuthField";
 
 export function LoginForm() {
   const router = useRouter();
@@ -35,51 +36,45 @@ export function LoginForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <label htmlFor="email" className="text-sm font-medium text-ink-700">
-          Email address
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Mail size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full text-base"
-          />
-        </div>
+    <div className="mx-auto w-full max-w-sm rounded-xl border border-ink-100 bg-white p-6 shadow-card">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <AuthField
+          label="Email address"
+          icon={Mail}
+          type="email"
+          required
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
 
-        <div className="flex items-center justify-between">
-          <label htmlFor="password" className="text-sm font-medium text-ink-700">
-            Password
-          </label>
-          <Link href="/forgot-password" className="text-xs font-medium text-brand-600 hover:text-brand-700">
-            Forgot password?
-          </Link>
-        </div>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Lock size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
-            className="w-full text-base"
-          />
-        </div>
+        <AuthField
+          label="Password"
+          labelAction={
+            <Link href="/forgot-password" className="text-xs font-medium text-brand-600 hover:text-brand-700">
+              Forgot password?
+            </Link>
+          }
+          icon={Lock}
+          type="password"
+          required
+          value={password}
+          onChange={setPassword}
+          placeholder="Your password"
+          autoComplete="current-password"
+        />
 
-        {error ? <p className="text-xs text-danger-500">{error}</p> : null}
+        {error ? (
+          <p className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-500">
+            {error}
+          </p>
+        ) : null}
 
         <button
           type="submit"
           disabled={pending || !email || !password}
-          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
         >
           {pending ? "Logging in…" : "Login"}
         </button>

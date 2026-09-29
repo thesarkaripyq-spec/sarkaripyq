@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Lock, Mail, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleButton } from "@/components/auth/GoogleButton";
+import { AuthField } from "@/components/auth/AuthField";
 
 export function SignupForm() {
   const router = useRouter();
@@ -63,7 +64,7 @@ export function SignupForm() {
 
   if (checkEmail) {
     return (
-      <div className="mx-auto w-full max-w-sm text-center">
+      <div className="mx-auto w-full max-w-sm rounded-xl border border-ink-100 bg-white p-6 text-center shadow-card">
         <p className="font-semibold text-ink-900">Check your email</p>
         <p className="mt-1 text-sm text-ink-500">
           We sent a confirmation link to <span className="font-medium text-ink-700">{email}</span>. Click it to
@@ -74,80 +75,63 @@ export function SignupForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <label htmlFor="name" className="text-sm font-medium text-ink-700">
-          Name
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <User size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="name"
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            className="w-full text-base"
-          />
-        </div>
+    <div className="mx-auto w-full max-w-sm rounded-xl border border-ink-100 bg-white p-6 shadow-card">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <AuthField
+          label="Name"
+          icon={User}
+          required
+          value={name}
+          onChange={setName}
+          placeholder="Your name"
+          autoComplete="name"
+        />
 
-        <label htmlFor="email" className="text-sm font-medium text-ink-700">
-          Email address
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Mail size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full text-base"
-          />
-        </div>
+        <AuthField
+          label="Email address"
+          icon={Mail}
+          type="email"
+          required
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
 
-        <label htmlFor="password" className="text-sm font-medium text-ink-700">
-          Password
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Lock size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            className="w-full text-base"
-          />
-        </div>
+        <AuthField
+          label="Password"
+          icon={Lock}
+          type="password"
+          required
+          minLength={8}
+          value={password}
+          onChange={setPassword}
+          placeholder="At least 8 characters"
+          autoComplete="new-password"
+        />
 
-        <label htmlFor="confirm-password" className="text-sm font-medium text-ink-700">
-          Confirm password
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Lock size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="confirm-password"
-            type="password"
-            required
-            minLength={8}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter your password"
-            className="w-full text-base"
-          />
-        </div>
+        <AuthField
+          label="Confirm password"
+          icon={Lock}
+          type="password"
+          required
+          minLength={8}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          placeholder="Re-enter your password"
+          autoComplete="new-password"
+        />
 
-        {error ? <p className="text-xs text-danger-500">{error}</p> : null}
+        {error ? (
+          <p className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-500">
+            {error}
+          </p>
+        ) : null}
 
         <button
           type="submit"
           disabled={pending || !name || !email || !password || !confirmPassword}
-          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
         >
           {pending ? "Creating account…" : "Create account"}
         </button>

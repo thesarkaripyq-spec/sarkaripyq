@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Mail } from "lucide-react";
+import { AuthField } from "@/components/auth/AuthField";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -36,7 +37,7 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <div className="mx-auto w-full max-w-sm text-center">
+      <div className="mx-auto w-full max-w-sm rounded-xl border border-ink-100 bg-white p-6 text-center shadow-card">
         <p className="font-semibold text-ink-900">Check your email</p>
         <p className="mt-1 text-sm text-ink-500">
           If an account exists for <span className="font-medium text-ink-700">{email}</span>, we&apos;ve sent a
@@ -47,30 +48,29 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <label htmlFor="email" className="text-sm font-medium text-ink-700">
-          Email address
-        </label>
-        <div className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5 focus-within:border-brand-500">
-          <Mail size={16} className="text-ink-300" aria-hidden />
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full text-base"
-          />
-        </div>
+    <div className="mx-auto w-full max-w-sm rounded-xl border border-ink-100 bg-white p-6 shadow-card">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <AuthField
+          label="Email address"
+          icon={Mail}
+          type="email"
+          required
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
 
-        {error ? <p className="text-xs text-danger-500">{error}</p> : null}
+        {error ? (
+          <p className="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-500">
+            {error}
+          </p>
+        ) : null}
 
         <button
           type="submit"
           disabled={pending || !email}
-          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="mt-1 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
         >
           {pending ? "Sending…" : "Send reset link"}
         </button>

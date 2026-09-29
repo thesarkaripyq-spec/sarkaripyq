@@ -18,7 +18,7 @@ test.describe("Login", () => {
   test("logs in with correct credentials and lands on the dashboard", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email address").fill(email);
-    await page.getByLabel("Password").fill(TEST_USER_PASSWORD);
+    await page.getByLabel("Password", { exact: true }).fill(TEST_USER_PASSWORD);
     await page.getByRole("button", { name: "Login" }).click();
 
     await page.waitForURL("**/dashboard");
@@ -28,7 +28,7 @@ test.describe("Login", () => {
   test("shows an error on the wrong password and stays on the login page", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email address").fill(email);
-    await page.getByLabel("Password").fill("wrong-password-entirely");
+    await page.getByLabel("Password", { exact: true }).fill("wrong-password-entirely");
     await page.getByRole("button", { name: "Login" }).click();
 
     await expect(page.getByText(/invalid login credentials/i)).toBeVisible();

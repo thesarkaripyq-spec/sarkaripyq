@@ -10,7 +10,7 @@ test.describe("Account deletion", () => {
 
     await page.goto("/login");
     await page.getByLabel("Email address").fill(user.email);
-    await page.getByLabel("Password").fill(TEST_USER_PASSWORD);
+    await page.getByLabel("Password", { exact: true }).fill(TEST_USER_PASSWORD);
     await page.getByRole("button", { name: "Login" }).click();
     await page.waitForURL("**/dashboard");
 
