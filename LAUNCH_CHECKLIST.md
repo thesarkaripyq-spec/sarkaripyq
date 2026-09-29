@@ -5,21 +5,20 @@ tackle it. Each item says what to do and, where it matters, exactly
 why. See `AUDIT.md` for the full reasoning behind anything summarized
 here.
 
-## 1. Resolve H4 (search statement timeouts) — root cause still open
+## 1. ~~Resolve H4 (search statement timeouts)~~ — done
 
-The mitigation (raised `anon` statement timeout, a logged one-time
-retry) already shipped, but the actual question — is this a genuine
-Supabase Free-tier resource constraint, or something else? — is still
-unanswered. Four attempts to get the real `EXPLAIN (ANALYZE, BUFFERS)`
-/ `pg_stat` output (Blocks A–D from the original diagnosis request)
-all arrived as unfilled template placeholders rather than real data.
-
-**What to do**: run the diagnostic queries in `AUDIT.md`'s H4 section
-against your production database (Supabase Dashboard → SQL Editor) and
-send back the actual output — numbers or a screenshot, not the
-template. Ranked fix options (most likely: upgrade compute tier, if
-it's confirmed as a resource constraint) can only be given once this
-is real.
+Blocks A–D were finally run against production on 2026-09-29 (see
+`AUDIT.md`'s H4 section for the full numbers). The real finding:
+migration `0008_raise_anon_search_timeout.sql` had been recorded as
+"applied" but never actually was — `anon`'s `statement_timeout` was
+still 3s, not 8s, this whole time. Fixed live via `ALTER ROLE anon SET
+statement_timeout = '8s';` in the SQL Editor, confirmed both `anon`
+and `authenticated` now read 8s. Combined with Block A (2ms query,
+zero disk reads) and Block D (99.45% cache hit ratio), this is a
+better outcome than the original "Free-tier resource constraint"
+theory — no compute-tier upgrade needed. Worth a quiet watch on
+`withTimeoutRetry()`'s logging for any further 57014s, but nothing
+else to do here for now.
 
 ## 2. Adopt the Supabase CLI for production migrations
 

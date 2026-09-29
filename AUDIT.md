@@ -39,7 +39,7 @@ each. See `LAUNCH_CHECKLIST.md` for what's actually left to do, in order.
 | H1 (broken `lint`) | ✅ Fixed |
 | H2 (open redirect) | ✅ Fixed, and now regression-tested (`e2e/security-open-redirect.spec.ts`) |
 | H3 (missing CSP) | ✅ Fixed, and now regression-tested (`e2e/security-headers.spec.ts`) |
-| **H4 (search timeouts)** | ⚠️ **Mitigated, root cause still OPEN** — waiting on your real Block A–D SQL output, not fixable further without it |
+| **H4 (search timeouts)** | ✅ **Real fix confirmed live (2026-09-29)** — the mitigation had never actually been applied to production; see the H4 diagnosis section for what Block A–D revealed and why |
 | H5 (dead `topic_id` column, found via Phase 5 testing) | ✅ Fixed |
 | M1–M9 | ✅ Fixed |
 | L1–L2 | ✅ Fixed |
@@ -174,11 +174,52 @@ Postgres/Docker available in this environment for a true isolated test
 DB), which is itself a scope limitation for Phase 5 to address with
 proper local-Supabase test infrastructure, not something fixed here.
 
-**Original search-timeout finding — status unchanged, still open**: three
-attempts to get the real Block A–D diagnostic numbers from the user all
-arrived as template placeholders rather than actual data. Root cause and
-ranked fix options for *that* specific finding remain undetermined;
-nothing here should be read as resolving it.
+**Original search-timeout finding — resolved (2026-09-29)**: four earlier
+attempts to get the real Block A–D diagnostic numbers arrived as template
+placeholders. The user finally ran all four directly against production's
+SQL Editor, and the results changed the conclusion:
+
+- **Block A** (`EXPLAIN (ANALYZE, BUFFERS)` on the real query, `q = 'math'`):
+  2.1–2.2ms actual time, `Buffers: shared hit=276` — zero disk reads, correct
+  GIN bitmap index scan. Query plan and indexing confirmed fine, again.
+- **Block D** (cache hit ratio on `questions`, cumulative since last stats
+  reset): **99.45%** (13,515,041 hits / 74,683 reads). This is high enough to
+  meaningfully weaken the "Free-tier `shared_buffers` too small for a 192MB
+  working set" theory from the original diagnosis below — if that were the
+  dominant cause, a ratio this high would be unlikely.
+- **Block C**: 192MB total (135MB table + 36MB indexes) — unchanged from the
+  original investigation, no surprise.
+- **Block B — the actual finding**: `anon`'s `statement_timeout` was still
+  **3s**, not 8s. Migration `0008_raise_anon_search_timeout.sql` (`ALTER ROLE
+  anon SET statement_timeout = '8s';`) was recorded above and in the Phase 5
+  final-status table as "applied" — **that was never verified, and it was
+  wrong.** `scripts/run-migrations.mjs` has no applied-migration ledger; it
+  just re-runs every `.sql` file in the folder unconditionally whenever
+  invoked, so "applied" reflected an assumption that someone had run it, not
+  a checked fact. Migration `0009` right after it in sort order did
+  genuinely go live (confirmed at the time via real retry-logging evidence),
+  so this wasn't a script failure — `0008` most likely just got missed in
+  whatever manual step actually pushed the others.
+
+**Practical effect**: every 57014 this project has ever logged may have
+happened under the still-3s budget the whole time — the mitigation's 8s
+headroom was never actually in play. The user ran `ALTER ROLE anon SET
+statement_timeout = '8s';` directly in the SQL Editor on 2026-09-29 and
+confirmed both `anon` and `authenticated` now read 8s. **This is a
+genuinely different, better outcome than the original theory**: given
+Block A/D's evidence, it's now plausible this alone resolves most or all
+remaining timeouts, with no compute-tier upgrade needed. Recommended
+follow-up: watch the `withTimeoutRetry()` logging (`src/lib/supabase/retry.ts`)
+for any further 57014s now that the real fix is live — if they still recur
+even with genuine 8s headroom and this cache-hit ratio, that would point to
+something else (CPU steal time on shared Free-tier compute, connection-pool
+contention) rather than the original memory theory. Nothing observed so far
+indicates that's needed.
+
+**Also worth doing** (tracked as `LAUNCH_CHECKLIST.md` item 2): since a
+migration file's presence was wrongly trusted as proof it ran, adopting the
+Supabase CLI's `migration list` is the way to check whether any *other*
+migration has the same gap, rather than assuming.
 
 **Deferred**: Phase 1 also asked for an automated test that fails if a
 short common search term errors or times out. Vitest now exists in this
