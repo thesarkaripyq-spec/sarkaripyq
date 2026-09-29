@@ -19,7 +19,7 @@ test.describe("Account deletion", () => {
     await page.getByRole("textbox").fill("DELETE");
     await page.getByRole("button", { name: "Permanently delete my account" }).click();
 
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL((url) => url.pathname === "/");
 
     // The session is genuinely gone server-side, not just hidden client-side.
     await page.goto("/dashboard");

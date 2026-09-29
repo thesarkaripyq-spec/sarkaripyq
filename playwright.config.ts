@@ -22,6 +22,13 @@ import { defineConfig, devices } from "@playwright/test";
 // invoked directly. NEXT_PUBLIC_* vars are inlined at *build* time, so
 // the build step (in package.json's test:e2e script) needs the same
 // NODE_ENV=test just as much as this start step does.
+// Configurable so a local `npm run dev`/`next start` already running on
+// the default port (someone previewing unrelated work) doesn't get
+// silently reused by reuseExistingServer below - override with
+// PLAYWRIGHT_PORT=<port> npm run test:e2e when 3000 is already taken.
+const PORT = process.env.PLAYWRIGHT_PORT ?? "3000";
+const BASE_URL = `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: "./e2e",
   // Runs before any test (and before webServer's NEXT_PUBLIC_* values
@@ -42,11 +49,11 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
   },
   webServer: {
-    command: "cross-env NODE_ENV=test next start",
-    url: "http://localhost:3000",
+    command: `cross-env NODE_ENV=test PORT=${PORT} next start`,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
