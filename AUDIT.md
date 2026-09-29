@@ -29,6 +29,35 @@ Stack confirmed: Next.js 16.3.6 (App Router, Turbopack), React 18, TypeScript
 design — content is loaded by an offline import pipeline using the service
 role key, which the app itself never touches.
 
+## Final status summary (2026-09-29, end of Phase 5)
+
+One line per item — the sections below have the full reasoning for
+each. See `LAUNCH_CHECKLIST.md` for what's actually left to do, in order.
+
+| Item | Status |
+|---|---|
+| H1 (broken `lint`) | ✅ Fixed |
+| H2 (open redirect) | ✅ Fixed, and now regression-tested (`e2e/security-open-redirect.spec.ts`) |
+| H3 (missing CSP) | ✅ Fixed, and now regression-tested (`e2e/security-headers.spec.ts`) |
+| **H4 (search timeouts)** | ⚠️ **Mitigated, root cause still OPEN** — waiting on your real Block A–D SQL output, not fixable further without it |
+| H5 (dead `topic_id` column, found via Phase 5 testing) | ✅ Fixed |
+| M1–M9 | ✅ Fixed |
+| L1–L2 | ✅ Fixed |
+| A1 (dynamic-everything rendering) | ✅ Resolved — static/ISR for all public pages |
+| A2 (forgot-password / account deletion) | ✅ Built, e2e-tested |
+| A3 (Auth rate limits guidance) | ✅ Guidance given (dashboard locations); confirmed the built-in mailer's 2/hour cap specifically **can't** be raised from that page at all |
+| Turnstile CAPTCHA | ⏭️ Decided: skip for now |
+| Env validation, health endpoint, cache headers, N+1 fixes, structured logging | ✅ Done |
+| Real Supabase CLI migration adoption (production) | 🕐 Prepared, **not yet run** — deferred at your request until after Phase 5, which just finished; ready whenever you want to do it |
+| Error tracking service | ⏭️ Decided: skip for now (structured `onRequestError` logging in place either way) |
+| Legal pages (`/privacy`, `/terms`) | 🕐 Placeholder built, **real content still needed** |
+| **Custom SMTP** | 🕐 **Not done** — needs your Resend/Brevo account; exact steps in `LAUNCH_CHECKLIST.md` |
+| Test data isolation (Phase 5) | ✅ Done — dedicated test project, `.env.test` mechanism, guard against ever hitting production |
+| Full test suite | ✅ 180 e2e passed / 38 skipped (legitimately) / 0 failed, 43 unit tests passed, 32.4% `src/lib/` coverage |
+| Lighthouse | 🕐 Config + thresholds ready (`npm run lighthouse`); **no real scores obtained** — every attempt in this environment collided with a concurrently-running dev server sharing the same `.next/` build output |
+| CI (GitHub Actions) | ✅ Workflow added; **not yet functional** until you add 3 repository secrets (see `README.md`) |
+| README.md | ✅ Added |
+
 ---
 
 ## Findings
@@ -48,7 +77,7 @@ no missing RLS.
 | H1 | `npm run lint` is completely broken. Next.js 16 removed the `next lint` command (confirmed against `node_modules/next/dist/docs/.../upgrading/version-16.md`); running it now errors immediately because Next's CLI misparses `lint` as a project directory argument. This means lint has been silently non-functional since the Next 16 upgrade — no one running `npm run lint` locally or in CI has gotten real output. | **Fixed** — `package.json`'s `lint` script now runs `eslint .` directly (the documented Next 16 replacement). |
 | H2 | Open-redirect risk in the OAuth callback (`src/app/auth/callback/route.ts`). The `next` query param was concatenated directly into `NextResponse.redirect(`${origin}${next}`)` with no validation. A crafted value like `next=@evil.com` produces the string `http://yoursite.com@evil.com`, which browsers parse as userinfo (`yoursite.com`) + host (`evil.com`) — i.e. a same-looking link that actually redirects off-site after a real Supabase login. This is exploitable by anyone who can get a user to click a modified `/auth/callback?...&next=@evil.com` link. | **Fixed** — `next` is now validated to be a same-origin relative path (`/...`, not `//...`, no `@`/scheme) before use; anything else falls back to `/dashboard`. |
 | H3 | No `Content-Security-Policy` header. The brief explicitly asks for one; `next.config.mjs` already sets the other 5 recommended headers. Because the app is (see A1 below) already fully dynamically rendered on every request, adding a per-request nonce-based CSP via `proxy.ts` costs nothing extra in caching/performance — it was simply missing. | **Fixed** — `src/proxy.ts` now generates a per-request nonce and sets a strict `script-src 'nonce-… strict-dynamic'` CSP (plus the standard `object-src none`, `frame-ancestors none`, `base-uri self`, `form-action self`, `upgrade-insecure-requests`). The nonce is threaded through the two inline `<script>` tags in `layout.tsx` and all four breadcrumb JSON-LD `<script>` tags. `style-src` keeps `'unsafe-inline'` because the dashboard's bar-chart widths are set via React's `style` prop — tightening that would need a larger refactor for a low security payoff. |
-| H4 | **Search intermittently 500s** for ordinary queries (`57014` — statement timeout). Full diagnosis below. | **Resolved** — `anon` role's `statement_timeout` raised 3s → 8s (migration `0008_raise_anon_search_timeout.sql`, must be applied by you — see below) plus a one-time retry in `searchQuestions()` on that exact error code. |
+| H4 | **Search intermittently 500s** for ordinary queries (`57014` — statement timeout). Full diagnosis below. | **Mitigated, root cause still OPEN** — `anon` role's `statement_timeout` raised 3s → 8s (migration `0008_raise_anon_search_timeout.sql`, applied) plus a one-time logged retry in `searchQuestions()` on that exact error code. This is a mitigation, not a fix: **the original root-cause question (is this a genuine Free-tier resource constraint?) is still unanswered** — four attempts to get the real Block A–D diagnostic SQL output back all arrived as unfilled template placeholders. Still waiting on that real data before ranked fix options can be given. See the H4 diagnosis below for exactly what's needed. |
 | H5 | **Every practice page (`/ssc/[exam]/pyq/[year]/[shift]`) would 500 against a fully-migrated database.** `src/lib/data/questions.ts` selected a `topic_id` column in two functions (`getQuestionNumbersForPaper`, `getQuestionByPaperAndNumber`) that `0003_remove_topics.sql` dropped — a real Postgres `42703` (undefined_column) error on every single practice page. Pre-existing, not introduced this pass — it just never surfaced before, almost certainly because production's schema had drifted from the migration files (this exact category of gap has come up before — see the migration-0009 schema-cache notes). Found the moment the Phase 5 test project (all 9 migrations genuinely, freshly applied via the CLI) hit this code path — the first environment to actually reflect the real post-0003 schema. | **Fixed** — removed the dead `topic_id` selects and type fields (nothing anywhere ever read `.topic_id` off a result, confirmed before removing it). Safe regardless of what production's actual current schema looks like: a `select` that doesn't ask for a column errors if the column doesn't exist in the query, but never errors from a column simply being *absent from the select list*. |
 
 #### H4 diagnosis — full investigation
