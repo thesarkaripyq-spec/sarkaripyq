@@ -7,8 +7,10 @@ import {
   ClipboardList,
   GraduationCap,
   Layers,
+  Send,
   Smartphone,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { getActiveExams, getAllSubjects, getSiteStats } from "@/lib/data/exams";
 import { ExamCard } from "@/components/exam/ExamCard";
@@ -19,7 +21,7 @@ import { HeroIllustration } from "@/components/layout/HeroIllustration";
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "SarkariPYQ – SSC Previous Year Questions, Free PYQ Practice",
+  title: "SarkariPYQ: SSC Previous Year Questions, Free PYQ Practice",
   description:
     "Practice real SSC previous year questions by exam, subject, year and shift. Free SSC CGL, CHSL, MTS, CPO, GD Constable and Stenographer PYQs with full explanations.",
   alternates: { canonical: "/" },
@@ -29,7 +31,7 @@ const FEATURES = [
   {
     icon: BookOpenCheck,
     title: "Real previous year papers",
-    description: "Every question is sourced from actual SSC exam papers — not guesswork or predicted sets.",
+    description: "Every question is sourced from actual SSC exam papers, not guesswork or predicted sets.",
   },
   {
     icon: ClipboardList,
@@ -49,7 +51,7 @@ const FEATURES = [
   {
     icon: Smartphone,
     title: "Built for mobile",
-    description: "Practice on the bus, in a coaching-class break, or between shifts — the whole site is designed mobile-first.",
+    description: "Practice on the bus, in a coaching-class break, or between shifts. The whole site is designed mobile-first.",
   },
   {
     icon: GraduationCap,
@@ -137,7 +139,7 @@ export default async function HomePage() {
         <section className="border-b border-ink-100 py-10 md:py-14">
           <h2 className="text-xl font-bold text-ink-900 md:text-2xl">Why practice on SarkariPYQ</h2>
           <p className="mt-2 max-w-2xl text-sm text-ink-500 md:text-base">
-            No filler, no fake mock tests — just the real questions that have appeared in past SSC exams, presented
+            No filler, no fake mock tests. Just the real questions that have appeared in past SSC exams, presented
             so you can drill efficiently.
           </p>
           <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -193,19 +195,46 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* Final CTA */}
-        <section className="mb-14 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 px-6 py-10 text-center shadow-card md:mb-16 md:px-10 md:py-14">
-          <h2 className="text-xl font-bold text-white md:text-2xl">Ready to start practicing?</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-brand-50 md:text-base">
-            Jump straight into a real SSC paper — free, no account needed.
-          </p>
-          <Link
-            href="/ssc"
-            className="mt-6 inline-flex items-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-semibold text-brand-600 hover:bg-brand-50"
-          >
-            <CheckCircle2 size={16} aria-hidden />
-            Browse SSC Exams
-          </Link>
+        {/* Community links — the highlighted closing section */}
+        <section className="mb-14 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 px-6 py-10 shadow-card md:mb-16 md:px-10 md:py-14">
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-white md:text-2xl">Join the SarkariPYQ community</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-brand-50 md:text-base">
+              Get new PYQ updates first, and discuss questions with other aspirants.
+            </p>
+          </div>
+
+          <div className="mx-auto mt-7 grid max-w-2xl gap-3 sm:grid-cols-2">
+            <a
+              href="https://t.me/sarkaripyq"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg bg-white/10 p-5 backdrop-blur transition-colors hover:bg-white/20"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-brand-600">
+                <Send size={20} aria-hidden />
+              </div>
+              <div>
+                <p className="font-semibold text-white">Telegram Channel</p>
+                <p className="text-sm text-brand-50">Exam alerts &amp; PYQ updates</p>
+              </div>
+            </a>
+
+            <a
+              href="https://t.me/sscpyqgroup"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg bg-white/10 p-5 backdrop-blur transition-colors hover:bg-white/20"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-brand-600">
+                <Users size={20} aria-hidden />
+              </div>
+              <div>
+                <p className="font-semibold text-white">Peer Group</p>
+                <p className="text-sm text-brand-50">Discuss questions &amp; strategy</p>
+              </div>
+            </a>
+          </div>
         </section>
       </div>
     </div>
