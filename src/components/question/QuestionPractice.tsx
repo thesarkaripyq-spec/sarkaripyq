@@ -2,12 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Option } from "@/components/question/Option";
 import { Explanation } from "@/components/question/Explanation";
 import { MathHtml } from "@/components/ui/MathHtml";
 import { QuestionNavigation } from "@/components/question/QuestionNavigation";
 import { BookmarkButton } from "@/components/question/BookmarkButton";
 import { ReportButton } from "@/components/question/ReportButton";
+import { cn } from "@/lib/utils";
 import type { QuestionDetail } from "@/types/database";
 
 interface Props {
@@ -87,6 +89,12 @@ export function QuestionPractice({
     ? question.options.find((o) => o.id === selectedOptionId)?.is_correct
     : null;
 
+  const arrowButtonClasses = (enabled: boolean) =>
+    cn(
+      "hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100 text-ink-500 transition-colors md:flex",
+      enabled ? "hover:border-brand-200 hover:text-brand-600" : "cursor-not-allowed opacity-30",
+    );
+
   return (
     <div className="mx-auto max-w-content px-4 py-6">
       <div className="border-b border-ink-100 pb-3">
@@ -104,48 +112,74 @@ export function QuestionPractice({
         </div>
       </div>
 
-      <MathHtml
-        className="text-[17px] leading-relaxed text-ink-900 [&_img]:mt-2 [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto"
-        html={question.question_html}
-      />
-      {question.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={question.image_url}
-          alt={`Diagram for question ${index + 1}`}
-          loading="lazy"
-          decoding="async"
-          className="mt-3 max-w-full rounded-md"
-        />
-      ) : null}
+      <div className="flex items-center gap-3 md:gap-4">
+        <button
+          type="button"
+          onClick={() => hasPrev && goTo(questionNumbers[index - 1]!)}
+          disabled={!hasPrev}
+          aria-label="Previous question"
+          className={arrowButtonClasses(hasPrev)}
+        >
+          <ChevronLeft size={20} aria-hidden />
+        </button>
 
-      <div className="mt-4 space-y-2.5">
-        {question.options.map((option) => (
-          <Option
-            key={option.id}
-            option={option}
-            selected={selectedOptionId === option.id}
-            revealed={revealed}
-            onSelect={() => selectOption(option.id)}
+        <div className="min-w-0 flex-1 rounded-xl border border-ink-100 p-5 md:p-6">
+          <MathHtml
+            className="text-[17px] leading-relaxed text-ink-900 [&_img]:mt-2 [&_img]:max-w-full [&_table]:max-w-full [&_table]:overflow-x-auto"
+            html={question.question_html}
           />
-        ))}
+          {question.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={question.image_url}
+              alt={`Diagram for question ${index + 1}`}
+              loading="lazy"
+              decoding="async"
+              className="mt-3 max-w-full rounded-md"
+            />
+          ) : null}
+
+          <div className="mt-4 space-y-2.5">
+            {question.options.map((option) => (
+              <Option
+                key={option.id}
+                option={option}
+                selected={selectedOptionId === option.id}
+                revealed={revealed}
+                onSelect={() => selectOption(option.id)}
+              />
+            ))}
+          </div>
+
+          {revealed ? (
+            <>
+              <p className={`mt-4 text-sm font-semibold ${isCorrect ? "text-success-600" : "text-danger-600"}`}>
+                {isCorrect ? "Correct" : `Incorrect — correct answer: ${correctOption?.label ?? ""}`}
+              </p>
+              {question.explanation_html ? <Explanation html={question.explanation_html} /> : null}
+            </>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => hasNext && goTo(questionNumbers[index + 1]!)}
+          disabled={!hasNext}
+          aria-label="Next question"
+          className={arrowButtonClasses(hasNext)}
+        >
+          <ChevronRight size={20} aria-hidden />
+        </button>
       </div>
 
-      {revealed ? (
-        <>
-          <p className={`mt-4 text-sm font-semibold ${isCorrect ? "text-success-600" : "text-danger-600"}`}>
-            {isCorrect ? "Correct" : `Incorrect — correct answer: ${correctOption?.label ?? ""}`}
-          </p>
-          {question.explanation_html ? <Explanation html={question.explanation_html} /> : null}
-        </>
-      ) : null}
-
-      <QuestionNavigation
-        onPrev={() => hasPrev && goTo(questionNumbers[index - 1]!)}
-        onNext={() => hasNext && goTo(questionNumbers[index + 1]!)}
-        hasPrev={hasPrev}
-        hasNext={hasNext}
-      />
+      <div className="md:hidden">
+        <QuestionNavigation
+          onPrev={() => hasPrev && goTo(questionNumbers[index - 1]!)}
+          onNext={() => hasNext && goTo(questionNumbers[index + 1]!)}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+        />
+      </div>
     </div>
   );
 }
