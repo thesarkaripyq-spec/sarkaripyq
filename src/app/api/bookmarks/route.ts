@@ -6,6 +6,41 @@ import { isSameOrigin } from "@/lib/same-origin";
 
 const bodySchema = z.object({ questionId: z.string().uuid() }).strict();
 
+export async function GET(request: Request) {
+  const ip = getClientIp(request);
+  if (!rateLimit(`bookmarks-read:${ip}`, 60, 60_000)) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const parsed = z.string().uuid().safeParse(searchParams.get("questionId"));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ bookmarked: false });
+  }
+
+  const { data, error } = await supabase
+    .from("bookmarks")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("question_id", parsed.data)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+  }
+
+  return NextResponse.json({ bookmarked: Boolean(data) });
+}
+
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "Invalid request." }, { status: 403 });

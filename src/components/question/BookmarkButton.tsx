@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,36 @@ export function BookmarkButton({ questionId }: { questionId: string }) {
   const [pending, setPending] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [error, setError] = useState(false);
+
+  // Adjusting state during render (react.dev/reference/react/useState) -
+  // resets synchronously in the same commit when the question changes,
+  // rather than in an effect. BookmarkButton isn't remounted when
+  // navigating Next/Prev (no `key` in QuestionPractice), so without this
+  // the previous question's bookmarked state would carry over.
+  const [loadedForId, setLoadedForId] = useState(questionId);
+  if (questionId !== loadedForId) {
+    setLoadedForId(questionId);
+    setBookmarked(false);
+    setNeedsAuth(false);
+    setError(false);
+  }
+
+  // This page is ISR-cached and shared across every visitor (see
+  // ssc/[exam]/pyq/[year]/[shift]/page.tsx), so bookmark status can never be
+  // baked into the server-rendered HTML - it has to be fetched per-user,
+  // client-side.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/bookmarks?questionId=${questionId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setBookmarked(Boolean(data.bookmarked));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [questionId]);
 
   async function toggle() {
     setPending(true);
