@@ -27,6 +27,14 @@ const SHARED_DIRECTIVES = [
   // bar-chart widths are set via React's `style` prop, which neither a
   // script nonce nor a script hash covers.
   "style-src 'self' 'unsafe-inline'",
+  // All question/option diagram images are self-hosted in this project's
+  // own Supabase Storage bucket ("question-images") - migrated 2026-09-29
+  // from their original external hosts (hranker.com, testranking.in,
+  // lh7-rt.googleusercontent.com) via scripts/testranking/migrate-images.mjs
+  // + rewrite-image-urls.mjs. Verified via direct DB query: 0 remaining
+  // references to those hosts except 1 image whose source itself 404s
+  // upstream (was already broken before the migration, not a regression).
+  // No external image host needs to be allowed here anymore.
   "img-src 'self' data: https://*.supabase.co",
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co",
@@ -57,14 +65,16 @@ function buildDynamicCsp(nonce: string): string {
 // deterministic in general), so hash-listing them is impractical - without
 // covering all of them, hydration fails outright (confirmed: React error
 // #412). 'unsafe-inline' is therefore required here, not a shortcut.
-// JSON-LD (theme-init/Organization/WebSite/breadcrumb <script
+// JSON-LD (Organization/WebSite/breadcrumb <script
 // type="application/ld+json">) is unaffected either way: verified that its
 // content stays fully present and DOM-readable regardless of whether CSP
 // "blocks execution" of it - crawlers read the serialized text node, they
 // don't execute it as JS.
-const STATIC_CSP = [SHARED_DIRECTIVES[0], "script-src 'self' 'unsafe-inline'", ...SHARED_DIRECTIVES.slice(1)].join(
-  "; ",
-);
+const STATIC_CSP = [
+  SHARED_DIRECTIVES[0],
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+  ...SHARED_DIRECTIVES.slice(1),
+].join("; ");
 
 // Refreshes the Supabase auth session cookie on every request so server
 // components always see an up-to-date session, and sets the Content-
