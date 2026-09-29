@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-white text-ink-900 antialiased dark:bg-ink-900 dark:text-ink-50;
+    @apply bg-white text-ink-900 antialiased;
   }
 
   :focus-visible {

@@ -12,8 +12,8 @@ const inter = Inter({ subsets: ["latin"], display: "swap" });
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "SarkariPYQ – SSC Previous Year Questions, Free PYQ Practice",
-    template: "%s – SarkariPYQ",
+    default: "SarkariPYQ: SSC Previous Year Questions, Free PYQ Practice",
+    template: "%s | SarkariPYQ",
   },
   icons: {
     icon: "/favicon.svg",
@@ -35,15 +35,15 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "SarkariPYQ",
     locale: "en_IN",
-    title: "SarkariPYQ – SSC Previous Year Questions",
+    title: "SarkariPYQ: SSC Previous Year Questions",
     description:
-      "Practice real SSC previous year questions by exam, subject, year and shift — free, with full explanations.",
+      "Practice real SSC previous year questions by exam, subject, year and shift. Free, with full explanations.",
     images: [{ url: "/ssc-logo.webp" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "SarkariPYQ – SSC Previous Year Questions",
-    description: "Practice real SSC previous year questions — free, with full explanations.",
+    title: "SarkariPYQ: SSC Previous Year Questions",
+    description: "Practice real SSC previous year questions. Free, with full explanations.",
     images: ["/ssc-logo.webp"],
   },
   alternates: {
@@ -86,14 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // here would force the entire app to render dynamically. Header's auth
   // state is resolved client-side instead (see AuthStatus/useAuthUser).
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(localStorage.getItem("theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}})()`,
-          }}
-        />
-      </head>
+    <html lang="en">
       <body className={inter.className}>
         <script
           type="application/ld+json"

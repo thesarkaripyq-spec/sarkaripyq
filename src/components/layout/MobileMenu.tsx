@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { BookOpen, LayoutGrid, Menu, Search, User as UserIcon, Users, X } from "lucide-react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
@@ -19,6 +20,16 @@ export function MobileMenu() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // The overlay is portaled to <body> so its `fixed` positioning is relative
+  // to the viewport, not to the header (whose backdrop-blur would otherwise
+  // make it the containing block for fixed-position descendants). document.body
+  // only exists on the client, hence the mounted check.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   function close() {
     setOpen(false);
@@ -73,103 +84,106 @@ export function MobileMenu() {
         aria-label="Menu"
         aria-expanded={open}
         aria-controls="mobile-menu-panel"
-        className="flex h-11 w-11 items-center justify-center rounded-full text-ink-700 hover:bg-ink-50 dark:text-ink-200 dark:hover:bg-ink-700 md:hidden"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-ink-700 hover:bg-ink-50 md:hidden"
       >
         <Menu size={22} aria-hidden />
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <button
-            type="button"
-            aria-hidden
-            tabIndex={-1}
-            className="absolute inset-0 bg-black/40"
-            onClick={close}
-          />
-          <div
-            id="mobile-menu-panel"
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu"
-            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-white p-4 shadow-card dark:bg-ink-900"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-extrabold text-ink-900 dark:text-white">
-                Sarkari<span className="text-brand-600">PYQ</span>
-              </span>
+      {open && mounted
+        ? createPortal(
+            <div className="fixed inset-0 z-50 md:hidden">
               <button
                 type="button"
+                aria-hidden
+                tabIndex={-1}
+                className="absolute inset-0 bg-black/40"
                 onClick={close}
-                aria-label="Close menu"
-                className="flex h-11 w-11 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 dark:hover:bg-ink-700"
+              />
+              <div
+                id="mobile-menu-panel"
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Menu"
+                className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-white p-4 shadow-card"
               >
-                <X size={20} aria-hidden />
-              </button>
-            </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-extrabold text-ink-900">
+                    Sarkari<span className="text-brand-600">PYQ</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={close}
+                    aria-label="Close menu"
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50"
+                  >
+                    <X size={20} aria-hidden />
+                  </button>
+                </div>
 
-            <nav className="mt-4 flex flex-col gap-1 text-sm font-semibold text-ink-700 dark:text-ink-200">
-              {NAV_LINKS.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={close}
-                  className="flex items-center gap-2.5 rounded-md px-3 py-3 hover:bg-ink-50 dark:hover:bg-ink-800"
-                >
-                  {Icon ? <Icon size={17} aria-hidden /> : null}
-                  {label}
-                </Link>
-              ))}
-              <Link
-                href="/search"
-                onClick={close}
-                className="flex items-center gap-2.5 rounded-md px-3 py-3 hover:bg-ink-50 dark:hover:bg-ink-800"
-              >
-                <Search size={17} aria-hidden />
-                Search
-              </Link>
-            </nav>
+                <nav className="mt-4 flex flex-col gap-1 text-sm font-semibold text-ink-700">
+                  {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={close}
+                      className="flex items-center gap-2.5 rounded-md px-3 py-3 hover:bg-ink-50"
+                    >
+                      {Icon ? <Icon size={17} aria-hidden /> : null}
+                      {label}
+                    </Link>
+                  ))}
+                  <Link
+                    href="/search"
+                    onClick={close}
+                    className="flex items-center gap-2.5 rounded-md px-3 py-3 hover:bg-ink-50"
+                  >
+                    <Search size={17} aria-hidden />
+                    Search
+                  </Link>
+                </nav>
 
-            <div className="mt-auto flex flex-col gap-2 border-t border-ink-100 pt-4 dark:border-ink-700">
-              {user === undefined ? (
-                <div className="h-11 animate-pulse rounded-md bg-ink-50 dark:bg-ink-800" aria-hidden />
-              ) : user ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    onClick={close}
-                    className="flex items-center gap-2.5 rounded-md border border-ink-100 px-3 py-3 text-sm font-semibold text-ink-700 dark:border-ink-700 dark:text-ink-200"
-                  >
-                    <UserIcon size={17} aria-hidden />
-                    Dashboard
-                  </Link>
-                  <div onClick={close}>
-                    <SignOutButton />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    onClick={close}
-                    className="rounded-md border border-ink-100 px-3 py-3 text-center text-sm font-semibold text-ink-700 dark:border-ink-700 dark:text-ink-200"
-                  >
-                    Login
-                  </Link>
-                  <Link
-                    href="/signup"
-                    onClick={close}
-                    className="rounded-md bg-brand-600 px-3 py-3 text-center text-sm font-semibold text-white hover:bg-brand-700"
-                  >
-                    Sign Up Free
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <div className="mt-auto flex flex-col gap-2 border-t border-ink-100 pt-4">
+                  {user === undefined ? (
+                    <div className="h-11 animate-pulse rounded-md bg-ink-50" aria-hidden />
+                  ) : user ? (
+                    <>
+                      <Link
+                        href="/dashboard"
+                        onClick={close}
+                        className="flex items-center gap-2.5 rounded-md border border-ink-100 px-3 py-3 text-sm font-semibold text-ink-700"
+                      >
+                        <UserIcon size={17} aria-hidden />
+                        Dashboard
+                      </Link>
+                      <div onClick={close}>
+                        <SignOutButton />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/login"
+                        onClick={close}
+                        className="rounded-md border border-ink-100 px-3 py-3 text-center text-sm font-semibold text-ink-700"
+                      >
+                        Login
+                      </Link>
+                      <Link
+                        href="/signup"
+                        onClick={close}
+                        className="rounded-md bg-brand-600 px-3 py-3 text-center text-sm font-semibold text-white hover:bg-brand-700"
+                      >
+                        Sign Up Free
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

@@ -22,7 +22,7 @@ export function MobileNav() {
   ];
 
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-ink-100 bg-white dark:border-ink-700 dark:bg-ink-900 md:hidden">
+    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-ink-100 bg-white md:hidden">
       <ul className="flex h-14 items-stretch justify-around">
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -32,7 +32,7 @@ export function MobileNav() {
                 href={href}
                 className={cn(
                   "flex h-full flex-col items-center justify-center gap-0.5 text-xs",
-                  active ? "text-brand-500" : "text-ink-500 dark:text-ink-300",
+                  active ? "text-brand-500" : "text-ink-500",
                 )}
               >
                 <Icon size={20} aria-hidden />

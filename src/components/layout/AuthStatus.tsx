@@ -15,7 +15,7 @@ export function AuthStatus() {
   if (user === undefined) {
     return (
       <div className="hidden items-center gap-2 pl-1 md:flex" aria-hidden>
-        <div className="h-9 w-24 animate-pulse rounded-md bg-ink-50 dark:bg-ink-800" />
+        <div className="h-9 w-24 animate-pulse rounded-md bg-ink-50" />
       </div>
     );
   }
@@ -26,7 +26,7 @@ export function AuthStatus() {
         <Link
           href="/dashboard"
           title={user.email}
-          className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 transition-colors hover:border-ink-300 dark:border-ink-700 dark:text-ink-200 dark:hover:border-ink-600"
+          className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 transition-colors hover:border-ink-300"
         >
           <UserIcon size={16} aria-hidden />
           Dashboard
@@ -40,7 +40,7 @@ export function AuthStatus() {
     <div className="hidden items-center gap-3 pl-1 md:flex">
       <Link
         href="/login"
-        className="text-sm font-semibold text-ink-700 transition-colors hover:text-brand-600 dark:text-ink-200"
+        className="text-sm font-semibold text-ink-700 transition-colors hover:text-brand-600"
       >
         Login
       </Link>
