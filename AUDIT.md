@@ -553,7 +553,7 @@ you read this:
 
 | # | Item | Decision |
 |---|---|---|
-| P4-1 | Replace `scripts/run-migrations.mjs` with real Supabase CLI migrations. | **You'll run `link`+`repair` yourself.** Everything short of that is prepared — see the step-by-step below. |
+| P4-1 | Replace `scripts/run-migrations.mjs` with real Supabase CLI migrations. | **Done (2026-09-29)** — you ran `link`+`repair` yourself; see below for the real outcome. |
 | P4-2 | Error-tracking service (Sentry or similar). | **Skip for now.** `onRequestError` → structured logs is enough for the moment; revisit if you want alerting/source-mapped stack traces later. |
 | P4-3 | Legal pages (`/privacy`, `/terms`) content. | **Clearly-marked placeholder** — built below with the routes/metadata/footer links now, obvious "replace before launch" text standing in for real policy content. |
 
@@ -589,40 +589,29 @@ colliding suggests the parser is more permissive than "exactly 14
 digits," but that's evidence, not confirmation. I'm not going to rename
 9 already-shipped, already-referenced-by-name migration files on a guess.
 
-**Your steps, in order:**
+**What actually happened (2026-09-29):**
 
-1. `supabase link --project-ref <your-project-ref>` (find the ref in
-   Dashboard → Settings → General). This is interactive/token-based
-   auth against your account — I can't do this part.
-2. `supabase migration list` — **read-only**, just prints local vs.
-   remote migrations side by side. This is the empirical answer to the
-   filename question above: if all 9 show up under "Local," the names
-   are fine as-is; if any are missing/skipped, they need renaming. Paste
-   me the output if you want help interpreting it.
-3. Depending on what step 2 shows:
-   - **If all 9 are recognized** (expected: remote shows none applied,
-     since they were run via the custom script, bypassing the CLI's
-     ledger entirely): mark them applied without re-running them —
-     `supabase migration repair 0001 0002 0003 0004 0005 0006 0007 0008 0009 --status applied`
-     (one command — `repair` accepts multiple versions at once).
-   - **If some/all aren't recognized**: tell me and I'll give you an
-     exact `git mv` sequence to rename them to 14-digit form. To
-     preserve order unambiguously and never collide with a real
-     `supabase migration new` timestamp (always current UTC time), I'd
-     use an obviously-synthetic anchor date in the past, e.g.
-     `20200101000001_init.sql` … `20200101000009_catalog_lookup_functions.sql`
-     — clearly not real application dates, just an ordering marker.
-4. Run `supabase migration list` again to confirm local and remote now
-   agree, with nothing pending.
-5. Once that's clean, tell me — I'll remove `scripts/run-migrations.mjs`
-   and `db:migrate` from `package.json` and document `supabase migration
-   new <name>` + `supabase db push` as the new workflow. Not doing that
-   removal now, before you've confirmed the CLI path actually works
-   end-to-end on your project — don't want to delete a working tool
-   before its replacement is verified.
+1. `supabase link --project-ref <ref>` — done, against production.
+2. `supabase migration list` — all 9 files were recognized cleanly
+   under their existing plain `NNNN` numbering; **no renaming needed**,
+   resolving the filename-parser uncertainty noted above. As expected,
+   every "Remote" column came back empty — the CLI's ledger had zero
+   record of any of them, confirming they'd only ever been applied via
+   the ad-hoc script, bypassing the CLI's bookkeeping entirely. This is
+   the same gap that let migration `0008` sit un-applied in production
+   for as long as it did (see H4) — the ledger, not a file's mere
+   existence in this repo, is the source of truth for what's actually
+   live.
+3. `supabase migration repair 0001 0002 0003 0004 0005 0006 0007 0008 0009 --status applied`
+   — ran once, marked all 9 as applied without re-running any SQL.
+4. `supabase migration list` again — confirmed local and remote now
+   agree, all 9 matched, nothing pending.
+5. `scripts/run-migrations.mjs` and its `db:migrate` script are
+   removed. `supabase migration new <name>` + `supabase db push` is
+   now the real workflow (documented in `README.md`).
 
-`scripts/seed.mjs`/`db:seed` are untouched either way — seeding local dev
-data isn't part of what you asked to move to the CLI.
+`scripts/seed.mjs`/`db:seed` are untouched — seeding local dev data was
+never part of this move to the CLI.
 
 ### Testing (Phase 5) — test data isolation, decided so far
 
@@ -1008,15 +997,16 @@ Lighthouse scores. See the manual checklist below.
 10. ~~Set a real `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`~~ — **done**,
     confirmed 2026-09-28. Postgres version also confirmed (17.6) — matches
     `supabase/config.toml`'s default, no edit needed.
-11. **Production CLI migration adoption (P4-1) — deferred at your
-    request**, walkthrough happens after Phase 5. Not forgotten; see
-    "adopting the Supabase CLI for migrations" above for exactly what's
-    already prepared and what's left.
+11. ~~Production CLI migration adoption (P4-1)~~ — **done**, confirmed
+    2026-09-29 against production itself: `supabase link`, `migration
+    list`, `migration repair`. See "adopting the Supabase CLI for
+    migrations" above for the real outcome (none of the 9 were in the
+    CLI's ledger — the same gap behind H4).
 12. ~~Decide on an error-tracking service (P4-2)~~ — **done**: skipped
     for now.
-13. ~~Decide on legal pages content (P4-3)~~ — **done**: placeholder
-    pages built at `/privacy` and `/terms`, linked from the footer,
-    noindexed until you replace the content.
+13. ~~Decide on legal pages content (P4-3)~~ — **done**: real policy
+    text now live at `/privacy` and `/terms` (no more placeholder),
+    indexable, and in `sitemap.ts`.
 14. **Check your Supabase plan's actual backup/retention policy** —
     Dashboard → Database → Backups. See "Backup / restore" above for why
     I didn't just state a number. Still open.

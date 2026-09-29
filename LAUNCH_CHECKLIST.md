@@ -22,28 +22,20 @@ else to do here for now.
 
 ## 2. Adopt the Supabase CLI for production migrations
 
-Prepared, not run — deferred at your request until after Phase 5,
-which just finished, so this is ready whenever you want to do it.
-`supabase/config.toml` already exists (`supabase init` was run
-locally, safe/no network call). What's left needs **your** account and
-**you** to run the actual commands, since they write to the remote
-migration ledger:
-
-1. `supabase link --project-ref <production-project-ref>` — you type
-   the database password yourself when prompted.
-2. `supabase migration list` (read-only) — tells us whether the 9
-   existing `NNNN_name.sql` files are recognized as-is, or need
-   renaming to the CLI's timestamp convention first. See `AUDIT.md`'s
-   "adopting the Supabase CLI for migrations" section for exactly what
-   this will show and what to do with either outcome.
-3. `supabase migration repair <versions> --status applied` — marks
-   the 9 already-applied migrations as applied in the CLI's ledger
-   without re-running them.
-4. Once `supabase migration list` shows local and remote agreeing
-   with nothing pending, tell me — I'll remove
-   `scripts/run-migrations.mjs`/`db:migrate` and document
-   `supabase migration new` + `supabase db push` as the replacement
-   workflow.
+Done (2026-09-29). You ran `supabase link --project-ref <ref>`, then
+`supabase migration list` — which confirmed **none** of the 9 existing
+migrations were tracked in the CLI's remote ledger at all (this
+project had only ever used the ad-hoc `scripts/run-migrations.mjs`,
+which doesn't write to Supabase's migration-history table). This is
+exactly what surfaced the H4 finding: a migration file's presence in
+this repo was never actually proof it had reached production — see
+`AUDIT.md`'s H4 section. Ran `supabase migration repair 0001 ... 0009
+--status applied` to mark all 9 as applied without re-running them,
+confirmed via a second `migration list` that local and remote now
+agree with nothing pending. `scripts/run-migrations.mjs` and its
+`db:migrate` script are removed; `supabase migration new <name>` +
+`supabase db push` is now the real workflow (documented in
+`README.md`).
 
 ## 3. Set up custom SMTP
 

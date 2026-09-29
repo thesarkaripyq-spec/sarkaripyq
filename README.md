@@ -28,15 +28,15 @@ from older training data.
    defaults to `http://localhost:3000` if unset.
 3. `npm run dev` — starts the dev server at `http://localhost:3000`.
 
-Database schema: `supabase/migrations/*.sql`, applied in filename order.
-`npm run db:migrate` runs them all against whatever `SUPABASE_DB_URL`
-points at in `.env.local` (a direct Postgres connection string, from
-Supabase Dashboard → Project Settings → Database — this is separate
-from the anon/service-role keys and only used by this script). See
-"Adopting the Supabase CLI" in `AUDIT.md` for the CLI-based path
-(`supabase migration new`, `supabase db push`) this project is
-transitioning toward instead of that script, if you're setting up a
-fresh project rather than an already-migrated one.
+Database schema: `supabase/migrations/*.sql`, managed via the Supabase
+CLI (`npx supabase`). `npx supabase link --project-ref <ref>` once per
+machine, then `npx supabase db push` applies any pending migrations to
+whatever project you linked to. To add a new migration:
+`npx supabase migration new <name>`, edit the generated file, then
+`db push` again. `npx supabase migration list` shows local vs. remote
+state if you're ever unsure what's actually applied — see `AUDIT.md`'s
+H4 section for why that check matters (a migration can exist in this
+repo and still never have reached production).
 
 Sample catalog data (exams, subjects, papers, questions — not real user
 accounts): `npm run db:seed`. The real PYQ corpus is imported separately
@@ -133,7 +133,7 @@ Accessibility ≥90, Best Practices ≥90, SEO ≥95. Override the port with
 | `npm run test:coverage` | Vitest unit tests + coverage report |
 | `npm run test:e2e` | Full Playwright suite against the test project |
 | `npm run lighthouse` | Lighthouse CI against `.env.local` |
-| `npm run db:migrate` | Apply `supabase/migrations/*.sql` to `SUPABASE_DB_URL` |
+| `npx supabase db push` | Apply pending `supabase/migrations/*.sql` to the linked project |
 | `npm run db:seed` | Apply `supabase/seed/*.sql` to `SUPABASE_DB_URL` (`.env.local`) |
 | `npm run db:seed:test` | Same, against `.env.test` |
 | `npm run db:reset:test` | Truncate + reseed the test project |
