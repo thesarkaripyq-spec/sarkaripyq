@@ -178,13 +178,22 @@ governing law, data-subject rights under India's DPDP Act), that's
 still worth doing before launch — but the placeholder/indexing
 mechanics are done.
 
-## 6. Turn on CI
+## 6. ~~Turn on CI~~ — done
 
-`.github/workflows/ci.yml` is committed but won't run correctly until
-3 repository secrets exist (Settings → Secrets and variables →
-Actions): `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY`,
-`TEST_SUPABASE_SERVICE_ROLE_KEY` — the **test** project's values (the
-same ones in your local `.env.test`), never production's.
+Done (2026-09-30), with two real bugs found and fixed along the way:
+
+1. The 3 repository secrets (`TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY`,
+   `TEST_SUPABASE_SERVICE_ROLE_KEY`) were initially mistyped when first
+   entered — caused a genuine "Invalid API key" build failure. Re-entered
+   correctly from the test project's actual dashboard values.
+2. `e2e/global-setup.ts` unconditionally treated a missing `.env.test`
+   as fatal, but `.env.test` is gitignored and never exists in CI —
+   `ci.yml`'s `env:` block injects the same values directly instead.
+   Fixed to only fail if the required var isn't set from *any* source.
+
+Both jobs (`checks` and `e2e`) now pass end-to-end against the real
+GitHub Actions runner (Run #11, commit `f9a29b1`), triggered by a
+normal push to `master`.
 
 ## 7. ~~Get real Lighthouse scores~~ — done
 
