@@ -12,8 +12,11 @@ export async function GET(request: Request) {
   const q = (searchParams.get("q") ?? "").trim().slice(0, 100);
   if (q.length < 2) return NextResponse.json({ results: [] });
 
+  const limitParam = Number(searchParams.get("limit"));
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 30) : 8;
+
   try {
-    const results = await searchQuestions(q, 8);
+    const results = await searchQuestions(q, limit);
     // Safe to cache at the shared/CDN layer: searchQuestions() uses the
     // cookie-free public client and filters only on is_published - the
     // response never varies by who's asking.

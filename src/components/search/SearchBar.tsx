@@ -1,73 +1,102 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { MathHtml } from "@/components/ui/MathHtml";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { QuestionSearchResult } from "@/lib/data/questions";
 
-export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<QuestionSearchResult[]>([]);
-  const [open, setOpen] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+const RESULTS_LIMIT = 24;
+
+export function SearchBar({
+  autoFocus = false,
+  initialQuery = "",
+  initialResults = [],
+}: {
+  autoFocus?: boolean;
+  initialQuery?: string;
+  initialResults?: QuestionSearchResult[];
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState<QuestionSearchResult[]>(initialResults);
+  const [loading, setLoading] = useState(false);
+  // The server already rendered results for initialQuery - skip the redundant
+  // first fetch and only refetch once the user actually changes the query.
+  const skipNextFetch = useRef(true);
 
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      if (query.trim().length < 2) {
-        setResults([]);
-        return;
-      }
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setResults(data.results ?? []);
-        setOpen(true);
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+
+    const trimmed = query.trim();
+    // Keeps the URL shareable/refreshable without a full Next.js navigation
+    // (which would re-render the whole route server-side on every keystroke).
+    window.history.replaceState(null, "", trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
+
+    // Nothing to fetch for a short query - the render below ignores
+    // `results` once the query drops under 2 characters anyway.
+    if (trimmed.length < 2) return;
+
+    const handle = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}&limit=${RESULTS_LIMIT}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResults(data.results ?? []);
+        }
+      } finally {
+        setLoading(false);
       }
     }, 300);
-    return () => clearTimeout(debounceRef.current);
+
+    return () => clearTimeout(handle);
   }, [query]);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (query.trim()) router.push(`/search?q=${encodeURIComponent(query)}`);
-  }
+  const trimmedQuery = query.trim();
 
   return (
-    <div className="relative">
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5">
+    <div>
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="flex items-center gap-2 rounded-md border border-ink-100 px-3 py-2.5"
+      >
         <Search size={18} className="text-ink-500" aria-hidden />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
           autoFocus={autoFocus}
           placeholder="Search SSC CGL questions..."
-          className="w-full text-base"
+          className="w-full bg-transparent text-base text-ink-900 outline-none"
         />
       </form>
 
-      {open && results.length > 0 ? (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-96 overflow-y-auto rounded-md border border-ink-100 bg-white shadow-card">
-          {results.map((r) => (
-            <Link
-              key={r.id}
-              href={`/ssc/${r.paper.exam.slug}/pyq/${r.paper.year}/${r.paper.slug}?q=${r.question_number}`}
-              className="block border-b border-ink-50 px-4 py-3 last:border-0 hover:bg-ink-50"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                {r.paper.exam.name} &bull; {r.paper.year}
-              </p>
-              <MathHtml className="mt-1 line-clamp-2 text-sm text-ink-900" html={r.question_html} />
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <div className="mt-6">
+        {trimmedQuery.length < 2 ? (
+          <EmptyState title="Search SSC PYQs" description="Search by exam, subject, year or question text." />
+        ) : results.length > 0 ? (
+          <div className="space-y-2.5">
+            {results.map((r) => (
+              <Link
+                key={r.id}
+                href={`/ssc/${r.paper.exam.slug}/pyq/${r.paper.year}/${r.paper.slug}?q=${r.question_number}`}
+                className="block rounded-lg border border-ink-100 px-4 py-3.5 transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-card"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                  {r.paper.exam.name} &bull; {r.paper.year}
+                </p>
+                <MathHtml className="mt-1 line-clamp-2 text-[15px] text-ink-900" html={r.question_html} />
+              </Link>
+            ))}
+          </div>
+        ) : loading ? null : (
+          <EmptyState title={`No results for "${trimmedQuery}"`} description="Try different keywords." />
+        )}
+      </div>
     </div>
   );
 }
