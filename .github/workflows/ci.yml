@@ -1,0 +1,72 @@
+name: CI
+
+# No deploy steps anywhere in this workflow, deliberately - deployment is
+# out of scope for this pass (see AUDIT.md / LAUNCH_CHECKLIST.md).
+on:
+  push:
+  pull_request:
+
+env:
+  # The dedicated Phase 5 test project (see AUDIT.md) - safe to expose in
+  # CI because it's never production and every e2e test cleans up the
+  # auth users it creates. Add these as repository secrets under Settings
+  # -> Secrets and variables -> Actions. Note: secrets are NOT available
+  # to pull_request runs triggered from a fork (GitHub blocks this by
+  # design, to stop a malicious PR exfiltrating them) - both jobs below
+  # will fail on a fork PR for that reason, not because anything is
+  # broken. They still run normally on pushes and on PRs from branches
+  # within this repository.
+  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+  NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      # Runs every unit test with coverage instrumentation - no separate
+      # non-coverage run needed, it's the same tests.
+      - run: npm run test:coverage
+      # Uses the test project's credentials above (env: block) - the
+      # homepage and a few other pages fetch real catalog data at build
+      # time, so a valid, reachable Supabase project is required even for
+      # a build-only check. NODE_ENV isn't "test" here on purpose: this is
+      # exercising the normal production build path, not the e2e-specific
+      # .env.test mechanism.
+      - run: npm run build
+
+  e2e:
+    name: End-to-end tests (against the test project)
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # global-setup.ts (see e2e/) independently refuses to run unless
+      # NEXT_PUBLIC_SUPABASE_URL contains the test project's ref, on top
+      # of this workflow only ever injecting the test project's secrets -
+      # two separate reasons this can never accidentally hit production.
+      - run: npm run test:e2e
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
