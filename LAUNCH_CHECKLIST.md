@@ -195,17 +195,24 @@ Actions): `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY`,
 `TEST_SUPABASE_SERVICE_ROLE_KEY` — the **test** project's values (the
 same ones in your local `.env.test`), never production's.
 
-## 7. Get real Lighthouse scores
+## 7. ~~Get real Lighthouse scores~~ — done
 
-`npm run lighthouse` (config + mobile thresholds already set: 85+
-Performance, 90+ Accessibility, 90+ Best Practices, 95+ SEO) — I
-couldn't get a real run to complete in this environment because every
-attempt collided with a `next dev` server already running on the same
-port, contending over the same `.next/` build output. Run it yourself
-locally (with no other `next dev`/`next start` sharing the same
-directory), or add it to CI later once you're comfortable with the
-runtime cost. Fix anything that comes back under threshold before
-launch.
+Ran via `npm run lighthouse` on 2026-09-29 across `/`, `/ssc`,
+`/ssc/cgl`, `/ssc/cgl/pyq`, `/practice`, `/books`. All 6 clear every
+threshold (85+ Performance, 90+ Accessibility, 90+ Best Practices,
+95+ SEO):
+
+| Page | Performance | Accessibility | Best Practices | SEO |
+|---|---|---|---|---|
+| `/` | 97 | 95 | 96 | 100 |
+| `/ssc` | 97 | 95 | 96 | 100 |
+| `/ssc/cgl` | 98 | 95 | 96 | 100 |
+| `/ssc/cgl/pyq` | 97 | 95 | 96 | 100 |
+| `/practice` | 98 | 95 | 96 | 100 |
+| `/books` | 98 | 95 | 96 | 100 |
+
+`.lighthouseci/assertion-results.json` is empty — zero threshold
+violations.
 
 ## 8. Check your Supabase plan's actual backup/retention policy
 
